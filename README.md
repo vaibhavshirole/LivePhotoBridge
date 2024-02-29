@@ -1,67 +1,47 @@
-MotionPhotoMuxer
+ApplePhotoMuxer
 ================
+Convert Apple Live Photos into Google Motion Photos. This version is made specifically for macOS because I wanted to make sure there is .HEIC support. Linux and Windows support is completely possible but I'm not good enough with Python to release a stable build.
 
-> **Note**
-> I've switched back to Android for the time being. I do have access to an iPhone for testing, but
-> likely won't be focusing on developing this much further.
-
-Convert Apple Live Photos into Google Motion Photos commonly found on Android phones.
+> This is a fork of MotionPhotoMuxer found [here](https://github.com/mihir-io/MotionPhotoMuxer)
+> 
+> As described in the credits of MotionPhotoMuxer, this wouldn't have been possible without the excellent writeup on the process of working with Motion Photos [here](https://medium.com/android-news/working-with-motion-photos-da0aa49b50c).
+>
+> Also, I got py3env2 working with help found [here](https://stackoverflow.com/a/72088586) in case anyone gets stuck :)
 
 # Installation
 
-As of right now, this script only has one dependency, `py3exiv2`. Unfortunately
-this requires building a C++ library to install, so you need to install a C++ toolchain.
+There will likely be issues with py3exiv2 if you're using an Apple Silicon Mac, but I can probably address most of them here. 
+### Prerequisites
+* homebrew
+* python
+* pip
 
-Using Ubuntu as an example:
-
-~~~bash
-sudo apt-get install build-essential python-all-dev libexiv2-dev libboost-python-dev python3 python3-pip python3-venv
-python3 -m pip install -r requirements.txt
-~~~
-
-Using an Apple Silicon Mac is a bit more complicated because of issues with py3exiv2. 
-* have homebrew, python, and pip installed: 
+Start by installing libraries necessary for py3exiv2
 ~~~bash
 brew install exiv2 boost boost-python3
+~~~
+
+Open your config file (I use zsh) and add the following exports **(make sure the 4 version numbers in the exports match yours)**
+~~~bash
 open ./zshrc # change for your config file
 ~~~
-* export the following vars in your config file: 
-```
-export CPLUS_INCLUDE_PATH=/opt/homebrew/Cellar/exiv2/0.27.5_1/include/:/opt/homebrew/opt/libssh/include/:/opt/homebrew/Cellar/boost/1.78.0_1/include/
 
-export LDFLAGS="-L/opt/homebrew/Cellar/boost-python3/1.78.0/lib -L/opt/homebrew/Cellar/exiv2/0.27.5_1/lib"
 ```
-* now, you can pip install py3exiv2 from /dep
+export CPLUS_INCLUDE_PATH=/opt/homebrew/Cellar/exiv2/𝟎.𝟐𝟕.𝟓_𝟏/include/:/opt/homebrew/opt/libssh/include/:/opt/homebrew/Cellar/boost/𝟏.𝟕𝟖.𝟎_𝟏/include/
+
+export LDFLAGS="-L/opt/homebrew/Cellar/boost-python3/𝟏.𝟕𝟖.𝟎/lib -L/opt/homebrew/Cellar/exiv2/𝟎.𝟐𝟕.𝟓_𝟏/lib"
+```
+
+Now, you can pip install py3exiv2 from /dep
 ~~~bash
 pip3 install py3exiv2-0.12.0.tar.gz
-
-# if you have .HEIC pictures on linux, you'll need these
-pip3 install piexif
-pip3 install pillow_heif
 ~~~
-
-## Installing on a Pixel/Android Phone
-
-* Install [Termux from the F-Droid App store](https://f-droid.org/en/packages/com.termux/)
-* Install the following packages within Termux in order to satisfy the dependencies for `pyexiv2`:
-
-~~~bash
-'pkg install python3'
-'pkg install git'
-'pkg install build-essential'
-'pkg install exiv2'
-'pkg install boost-headers'
-git clone https://github.com/mihir-io/MotionPhotoMuxer.git
-python3 -m pip install -r MotionPhotoMuxer/requirements.txt
-~~~
-
-This should leave you with a working copy of MotionPhotoMuxer directly on your Pixel/other Android phone.
-You may want to make sure Termux has the "Storage" permission granted from within the system settings, if
-you plan on writing the output files to the `/sdcard/` partition.
-
 
 # Usage
+## GUI
+> under construction
 
+## CLI
 ~~~
 usage: MotionPhotoMuxer.py [-h] [--verbose] [--dir DIR] [--recurse] [--photo PHOTO] [--video VIDEO] [--output OUTPUT] [--copyall]
 
@@ -78,7 +58,9 @@ options:
   --copyall        Copy unpaired files to directory.
 ~~~
 
-A JPEG photo and MOV or MP4 video must be provided. The code only does simple
+
+This will convert any HEIC or PNG to JPG when run, 
+as the muxer requires a JPEG photo and MOV or MP4 video. The code only does simple
 error checking to see if the file extensions are `.jpg|.jpeg` and `.mov|.mp4`
 respectively, so if the actual photo/video encoding is something funky, things
 may not work right.
@@ -86,11 +68,6 @@ may not work right.
 > **Note**
 > The output motion photo tends to work more reliably in my experience if the input video is H.264 rather than HEVC.
 
-This has been tested successfully on a couple photos taken on an iPhone 12 and
-uploaded to Google Photos through a Pixel XL, but there hasn't been any
-extensive testing done yet, so use at your own risk!
-
-# Credit
-
-This wouldn't have been possible without the excellent writeup on the process
-of working with Motion Photos [here](https://medium.com/android-news/working-with-motion-photos-da0aa49b50c).
+This has been tested a bunch between an iPhone 11 Pro, MacBook Pro M1, and Pixel 3a. 
+But, as was said in the original work, the testing is really just on my own stuff
+and might not work for you, so make backups! 
