@@ -10,7 +10,6 @@ Convert Apple Live Photos into Google Motion Photos. This version is made specif
 
 # Installation
 
-There will likely be issues with py3exiv2 if you're using an Apple Silicon Mac, but I can probably address most of them here. 
 ### Prerequisites
 * homebrew
 * python
@@ -21,11 +20,12 @@ Start by installing libraries necessary for py3exiv2
 brew install exiv2 boost boost-python3
 ~~~
 
-Open your config file (I use zsh) and add the following exports **(make sure the 4 version numbers in the exports match yours)**
+***[This step is only for Apple Silicon]*** Open your config file (I use zsh) and add the following exports 
 ~~~bash
 open ./zshrc # change for your config file
 ~~~
 
+* (make sure the 4 version numbers in the exports below match yours. you can find version numbers in /opt/homebrew/ )
 ```
 export CPLUS_INCLUDE_PATH=/opt/homebrew/Cellar/exiv2/𝟎.𝟐𝟕.𝟓_𝟏/include/:/opt/homebrew/opt/libssh/include/:/opt/homebrew/Cellar/boost/𝟏.𝟕𝟖.𝟎_𝟏/include/
 

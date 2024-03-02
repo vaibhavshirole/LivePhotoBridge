@@ -1,0 +1,16 @@
+for file in *.HEIC; 
+do 
+    sips -s format jpeg "$file" --out "${file%.HEIC}.JPG"
+    # Remove the HEIC file after conversion
+    rm "$file"
+done
+
+for file in *.HEIC; 
+do
+    outdir="out"
+    mkdir -p "$outdir"
+    sips -s format jpeg "$file" --out "$outdir/${file%.heic}.JPG"
+
+    # Remove the HEIC file after conversion
+    rm "$file"
+done

@@ -4,6 +4,12 @@ import pillow_heif
 import os
 from pathlib import Path
 
+# if you have .HEIC pictures on linux, you'll need these
+# pip3 install piexif
+# pip3 install pillow_heif
+#
+# this HEIC converter is a work in progress :(
+
 def convert_heic_to_jpg(input_file):
     # Open the HEIC file and reset the pointer
     heif_file = pillow_heif.read_heif(input_file)
