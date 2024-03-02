@@ -22,7 +22,7 @@ brew install exiv2 boost boost-python3
 
 ***[This step is only for Apple Silicon]*** Open your config file (I use zsh) and add the following exports 
 ~~~bash
-open ./zshrc # change for your config file
+open ./zshrc
 ~~~
 
 * (make sure the 4 version numbers in the exports below match yours. you can find version numbers in /opt/homebrew/ )
