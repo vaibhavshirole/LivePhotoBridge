@@ -1,6 +1,6 @@
 ApplePhotoMuxer
 ================
-Convert Apple Live Photos into Google Motion Photos. This version is made specifically for macOS because I wanted to make sure there is .HEIC support. Linux and Windows support is completely possible but I'm not good enough with Python to release a stable build.
+Convert Apple Live Photos into Google Motion Photos. This version is made specifically for macOS because I wanted to make sure there is .HEIC support and avoid making cross-platform GUI. Linux and Windows support is completely possible, and can probably even work if you sub in LinuxConverter.py's methods but I don't have anything but a Mac so can't test.  
 
 > This is a fork of MotionPhotoMuxer found [here](https://github.com/mihir-io/MotionPhotoMuxer)
 > 
@@ -38,8 +38,18 @@ pip3 install py3exiv2-0.12.0.tar.gz
 ~~~
 
 # Usage
+
 ## GUI
-> under construction
+
+Start by installing libraries necessary for the interface
+~~~bash
+brew install python-tk
+~~~
+
+That should be it, you can now run it.
+~~~
+usage: app.py
+~~~
 
 ## CLI
 ~~~
@@ -51,7 +61,7 @@ options:
   -h, --help       show this help message and exit
   --verbose        Show logging messages.
   --dir DIR        Process a directory for photos/videos. Takes precedence over --photo/--video
-  --recurse        Recursively process a directory. Only applies if --dir is also provided
+  --recurse        Recursively scan a directory. Only if --dir given (caution: identical filenames may cause errors)
   --photo PHOTO    Path to the JPEG photo to add.
   --video VIDEO    Path to the MOV video to add.
   --output OUTPUT  Path to where files should be written out to.
@@ -70,4 +80,5 @@ may not work right.
 
 This has been tested a bunch between an iPhone 11 Pro, MacBook Pro M1, and Pixel 3a. 
 But, as was said in the original work, the testing is really just on my own stuff
+
 and might not work for you, so make backups! 
