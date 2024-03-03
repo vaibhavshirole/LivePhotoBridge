@@ -124,6 +124,7 @@ def process_directory(file_dir, recurse):
     file_pairs = []
     unmatched_images = []
 
+    # to-do: validate matches with basic metadata if using --recurse
     if recurse:
         for root, dir, files in os.walk(file_dir):
             for file in files:

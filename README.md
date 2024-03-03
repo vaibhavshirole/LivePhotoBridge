@@ -1,10 +1,12 @@
-ApplePhotoMuxer
+LivePhotoBridge
 ================
-Convert Apple Live Photos into Google Motion Photos. This version is made specifically for macOS because I wanted to make sure there is .HEIC support and avoid making cross-platform GUI. Linux and Windows support is completely possible, and can probably even work if you sub in LinuxConverter.py's methods but I don't have anything but a Mac so can't test.  
+Retain Apple Live Photos when transferring from iPhone to Pixel's Motion Photos.
+
+This version is made specifically for macOS because I wanted to make sure there is .HEIC support and a stable GUI. Linux and Windows support is completely possible, and can probably even work if you sub in ./converters/LinuxConverter.py for the Mac version but I don't have anything but a Mac so I can't test it.
 
 > This is a fork of MotionPhotoMuxer found [here](https://github.com/mihir-io/MotionPhotoMuxer)
 > 
-> As described in the credits of MotionPhotoMuxer, this wouldn't have been possible without the excellent writeup on the process of working with Motion Photos [here](https://medium.com/android-news/working-with-motion-photos-da0aa49b50c).
+> As described in the credits of MotionPhotoMuxer, this wouldn't have been possible without the excellent writeup on the process of working with MicroVideo [here](https://medium.com/android-news/working-with-motion-photos-da0aa49b50c), along with the blog detailing the update to the format called MotionPhotos [here](https://timojyrinki.gitlab.io/hugo/post/2021-03-30-pixel-motionphoto-microvideo-file-formats/)
 >
 > Also, I got py3env2 working with help found [here](https://stackoverflow.com/a/72088586) in case anyone gets stuck :)
 
@@ -48,7 +50,7 @@ brew install python-tk
 
 That should be it, you can now run it.
 ~~~
-usage: app.py
+python3 app.py
 ~~~
 
 ## CLI
@@ -68,17 +70,17 @@ options:
   --copyall        Copy unpaired files to directory.
 ~~~
 
-
-This will convert any HEIC or PNG to JPG when run, 
-as the muxer requires a JPEG photo and MOV or MP4 video. The code only does simple
+This will convert any HEIC to JPG when run, as the muxer 
+requires a JPEG photo and MOV or MP4 video. The code only does simple
 error checking to see if the file extensions are `.jpg|.jpeg` and `.mov|.mp4`
 respectively, so if the actual photo/video encoding is something funky, things
-may not work right.
+may not work right. This is also true for the recursive scan, 
+which is simply checking the entire filetree for identical `.jpg|.jpeg` and `.mov|.mp4` 
+filenames. This may cause erroneous live photos.
 
 > **Note**
 > The output motion photo tends to work more reliably in my experience if the input video is H.264 rather than HEVC.
 
 This has been tested a bunch between an iPhone 11 Pro, MacBook Pro M1, and Pixel 3a. 
 But, as was said in the original work, the testing is really just on my own stuff
-
 and might not work for you, so make backups! 
