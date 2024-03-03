@@ -1,5 +1,6 @@
 import os
 
+'''
 file_dir = '/Users/vaibhav/Downloads/temp2'
 file_pairs = []
 
@@ -29,3 +30,7 @@ for root, _, files in os.walk(file_dir):
                 file_pairs.append((os.path.join(root, file), video_path))
 
 print(file_pairs)
+'''
+
+inputFile = "/Users/vaibhav/Downloads/temp/IMG_5099.MP.HEIC"
+print(os.path.splitext(inputFile)[0])
