@@ -111,6 +111,19 @@ def matching_video(photo_name, file_dir):
                         return video_path
     return ""
 
+def matching_video(photo_path):
+    base = os.path.splitext(photo_path)[0]
+    logging.info("Looking for videos named: {}".format(base))
+    if os.path.exists(base + ".mov"):
+        return base + ".mov"
+    if os.path.exists(base + ".mp4"):
+        return base + ".mp4"
+    if os.path.exists(base + ".MOV"):
+        return base + ".MOV"
+    if os.path.exists(base + ".MP4"):
+        return base + ".MP4"
+    else:
+        return ""
 
 def process_directory(file_dir, recurse):
     """
