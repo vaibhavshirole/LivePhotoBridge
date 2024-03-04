@@ -5,6 +5,8 @@ import shutil
 import sys
 from os.path import exists, basename, isdir
 
+import getexif
+
 import pyexiv2
 
 def validate_directory(dir):
@@ -70,16 +72,49 @@ def add_xmp_metadata(merged_file, offset):
 
     # (py)exiv2 raises an exception here on basically all my 'test' iPhone 13 photos -- I'm not sure why,
     # but it seems safe to ignore so far. It's logged anyways just in case.
+    
+    LivePhotoVideoIndex = int(getexif.get_live_photo_video_index(merged_file))
+    RunTimeScale = int(getexif.get_run_time_scale(merged_file))
+    MicroVideoPresentationTimestampUs = (LivePhotoVideoIndex/RunTimeScale)*1000000
+
+    # register GCamera 
     try:
         pyexiv2.xmp.register_namespace('http://ns.google.com/photos/1.0/camera/', 'GCamera')
     except KeyError:
         logging.warning("exiv2 detected that the GCamera namespace already exists.".format(merged_file))
+
+    # register Container
+    try:
+        pyexiv2.xmp.register_namespace('http://ns.adobe.com/xap/1.0/device/', 'Container')
+    except KeyError:
+        logging.warning("exiv2 detected that the Container namespace already exists.".format(merged_file))
+
     metadata['Xmp.GCamera.MicroVideo'] = pyexiv2.XmpTag('Xmp.GCamera.MicroVideo', 1)
     metadata['Xmp.GCamera.MicroVideoVersion'] = pyexiv2.XmpTag('Xmp.GCamera.MicroVideoVersion', 1)
     metadata['Xmp.GCamera.MicroVideoOffset'] = pyexiv2.XmpTag('Xmp.GCamera.MicroVideoOffset', offset)
     metadata['Xmp.GCamera.MicroVideoPresentationTimestampUs'] = pyexiv2.XmpTag(
-        'Xmp.GCamera.MicroVideoPresentationTimestampUs',
-        1500000)  # in Apple Live Photos, the chosen photo is 1.5s after the start of the video, so 1500000 microseconds
+        'Xmp.GCamera.MicroVideoPresentationTimestampUs', MicroVideoPresentationTimestampUs)
+    
+    # to-do: convert to MotionPhoto
+    # https://gitlab.gnome.org/GNOME/shotwell/-/issues/233#note_1064700 
+    # directory_items = [
+    # {
+    #         'Mime': 'image/jpeg',
+    #         'Semantic': 'Primary',
+    #         'Length': 0,
+    #         'Padding': 0
+    #     },
+    #     {
+    #         'Mime': 'video/mp4',
+    #         'Semantic': 'MotionPhoto',
+    #         'Length': 1601147,
+    #         'Padding': 0
+    #     }
+    # ]
+    # for i, item in enumerate(directory_items):
+    #     for key, value in item.items():
+    #         metadata[f'Xmp.Container.DirectoryItem{i}.{key}'] = pyexiv2.XmpTag(f'Xmp.Container.DirectoryItem{i}.{key}', value) 
+
     metadata.write()
 
 
@@ -213,7 +248,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Merges a photo and video into a Microvideo-formatted Google Motion Photo')
+        description='Merges a photo and video into a MotionPhoto-formatted Google Motion Photo')
     parser.add_argument('--verbose', help='Show logging messages.', action='store_true')
     parser.add_argument('--dir', type=str, help='Process a directory for photos/videos. Takes precedence over '
                                                 '--photo/--video')

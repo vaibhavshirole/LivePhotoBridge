@@ -50,24 +50,25 @@ def extract_exif_data(input_file, output_file):
     with open(output_file, "w") as f:
         subprocess.run(command, stdout=f)
 
-filename = "/Users/vaibhav/Downloads/20240301_220753.jpg"
-output_file =  "/Users/vaibhav/Downloads/IMG_5002.JPG_exif.txt"
-extract_exif_data(filename, output_file) # uncomment if you want to save the data into a file
+if __name__ == '__main__':
+    filename = "/Users/vaibhav/Documents/Media/Syncbox/IMG_5002.JPG"
+    output_file =  "/Users/vaibhav/Downloads/JPG_exif.txt"
+    extract_exif_data(filename, output_file) # uncomment if you want to save the data into a file
 
-content_identifier = get_content_identifier(filename)
-if content_identifier:
-    print("Content Identifier:", content_identifier)
+    content_identifier = get_content_identifier(filename)
+    if content_identifier:
+        print("Content Identifier:", content_identifier)
 
-    live_photo_video_index = get_live_photo_video_index(filename)
-    if live_photo_video_index:
-        print("Live Photo Video Index:", live_photo_video_index)
+        live_photo_video_index = get_live_photo_video_index(filename)
+        if live_photo_video_index:
+            print("Live Photo Video Index:", live_photo_video_index)
+        else:
+            print("Live Photo Video Index does not exist in the metadata.")
+
+        run_time_scale = get_run_time_scale(filename)
+        if run_time_scale:
+            print("Run Time Scale:", run_time_scale)
+        else:
+            print("Run Time Scale does not exist in the metadata.")
     else:
-        print("Live Photo Video Index does not exist in the metadata.")
-
-    run_time_scale = get_run_time_scale(filename)
-    if run_time_scale:
-        print("Run Time Scale:", run_time_scale)
-    else:
-        print("Run Time Scale does not exist in the metadata.")
-else:
-    print("Content Identifier does not exist in the metadata.")
+        print("Content Identifier does not exist in the metadata.")
