@@ -1,5 +1,0 @@
-py3env2 installing help: https://stackoverflow.com/a/72088586/23304893
-
-sips -s format jpeg IMG_5488.HEIC --out IMG_5488.jpg
-
-python3 MotionPhotoMuxer.py --photo /Users/vaibhav/Downloads/june-july-aug/IMG_5488.jpg --video /Users/vaibhav/Downloads/june-july-aug/IMG_5488.MP4 --output /Users/vaibhav/Desktop

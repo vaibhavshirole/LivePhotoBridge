@@ -17,9 +17,10 @@ This version is made specifically for macOS because I wanted to make sure there 
 * python
 * pip
 
-Start by installing libraries necessary for py3exiv2
+Start by installing the necessary libraries
 ~~~bash
 brew install exiv2 boost boost-python3
+brew install exiftool
 ~~~
 
 ***[This step is only for Apple Silicon]*** Open your config file (I use zsh) and add the following exports 
@@ -34,9 +35,10 @@ export CPLUS_INCLUDE_PATH=/opt/homebrew/Cellar/exiv2/𝟎.𝟐𝟕.𝟓_𝟏/inc
 export LDFLAGS="-L/opt/homebrew/Cellar/boost-python3/𝟏.𝟕𝟖.𝟎/lib -L/opt/homebrew/Cellar/exiv2/𝟎.𝟐𝟕.𝟓_𝟏/lib"
 ```
 
-Now, you can pip install py3exiv2 from /dep
+Now, you can pip install py3exiv2 from /packages, and pyexiftool to read Apple's MakerNote in the EXIF
 ~~~bash
-pip3 install py3exiv2-0.12.0.tar.gz
+pip3 install ./packages/py3exiv2-0.12.0.tar.gz
+pip3 install pyexiftool
 ~~~
 
 # Usage
