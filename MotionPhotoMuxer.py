@@ -6,6 +6,7 @@ import sys
 from os.path import exists, basename, isdir
 
 import getexif
+import MacConverter
 
 import pyexiv2
 
@@ -223,6 +224,10 @@ def main(args):
 
     if args.dir is not None:
         validate_directory(args.dir)
+
+        if args.heic:
+            MacConverter.convert_directory(args.dir)
+        
         pairs = process_directory(args.dir, args.recurse)
         procesed_files = set()
         for pair in pairs:
@@ -256,6 +261,9 @@ def main(args):
             exit(1)
 
         if validate_media(args.photo, args.video):
+            if args.heic:
+                MacConverter.convert_file(args.photo)
+
             convert(args.photo, args.video, outdir)
 
 
@@ -271,5 +279,6 @@ if __name__ == '__main__':
     parser.add_argument('--video', type=str, help='Path to the MOV video to add.')
     parser.add_argument('--output', type=str, help='Path to where files should be written out to.')
     parser.add_argument('--copyall', help='Copy unpaired files to directory.', action='store_true')
+    parser.add_argument('--heic', help='Convert all .HEIC to .JPG (macOS only)', action='store_true')
 
     main(parser.parse_args())
