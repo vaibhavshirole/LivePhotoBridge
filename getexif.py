@@ -1,6 +1,9 @@
 # below is a working script to get a text file of all exif
 # exiftool -a -u -g1 -ee3 -api RequestAll=3 IMG_5002.JPG >IMG_5002.JPG_exif.txt
 
+import os
+import sys
+import argparse
 import subprocess
 
 def get_metadata_fields(filename):
@@ -50,25 +53,46 @@ def extract_exif_data(input_file, output_file):
     with open(output_file, "w") as f:
         subprocess.run(command, stdout=f)
 
+def create_arg_parser():
+    # Creates and returns the ArgumentParser object
+    parser = argparse.ArgumentParser(description='Get all EXIF of a given image into a .txt, or just in your console.')
+    parser.add_argument('--file', help='Path to the input file.')
+    parser.add_argument('--outfile', help='Provide a .txt of all EXIF.', action='store_true')
+    return parser
+
 if __name__ == '__main__':
-    filename = "/Users/vaibhav/Documents/Media/Syncbox/IMG_5002.JPG"
-    output_file =  "/Users/vaibhav/Downloads/JPG_exif.txt"
-    extract_exif_data(filename, output_file) # uncomment if you want to save the data into a file
+    arg_parser = create_arg_parser()
+    parsed_args = arg_parser.parse_args(sys.argv[1:])
 
-    content_identifier = get_content_identifier(filename)
-    if content_identifier:
-        print("Content Identifier:", content_identifier)
+    output_file =  "JPG_exif.txt"  # Output file will show up in whatever directory this script is in
 
-        live_photo_video_index = get_live_photo_video_index(filename)
-        if live_photo_video_index:
-            print("Live Photo Video Index:", live_photo_video_index)
+    if parsed_args.file:
+        if os.path.exists(parsed_args.file):
+
+            print(get_metadata_fields(parsed_args.file))
+            print("")
+            print("")
+
+            content_identifier = get_content_identifier(parsed_args.file)
+            if content_identifier:
+                print("Content Identifier:", content_identifier)
+
+                live_photo_video_index = get_live_photo_video_index(parsed_args.file)
+                if live_photo_video_index:
+                    print("Live Photo Video Index:", live_photo_video_index)
+                else:
+                    print("Live Photo Video Index does not exist in the metadata.")
+
+                run_time_scale = get_run_time_scale(parsed_args.file)
+                if run_time_scale:
+                    print("Run Time Scale:", run_time_scale)
+                else:
+                    print("Run Time Scale does not exist in the metadata.")
+            else:
+                print("Content Identifier does not exist in the metadata.")
+
+            if parsed_args.outfile:
+                extract_exif_data(parsed_args.file, output_file)
+            
         else:
-            print("Live Photo Video Index does not exist in the metadata.")
-
-        run_time_scale = get_run_time_scale(filename)
-        if run_time_scale:
-            print("Run Time Scale:", run_time_scale)
-        else:
-            print("Run Time Scale does not exist in the metadata.")
-    else:
-        print("Content Identifier does not exist in the metadata.")
+            print("File does not exist:", parsed_args.file)

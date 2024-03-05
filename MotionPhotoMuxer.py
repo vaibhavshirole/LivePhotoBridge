@@ -136,17 +136,19 @@ def convert(photo_path, video_path, output_path):
 
 def matching_video(photo_path, file_dir):
     photo_name = os.path.splitext(os.path.basename(photo_path))[0]
-
     logging.info("Looking for videos named: {}".format(photo_name))
-    video_extensions = ['.mov', '.mp4', '.MOV', '.MP4']
+    
+    video_paths = [] # store multiple video paths if doing *careful* recursive search
+    video_extensions = ['.MOV', '.MP4']
     for root, dir, files in os.walk(file_dir):
         for file in files:
             if os.path.splitext(file)[0] == photo_name:
                 for ext in video_extensions:
-                    video_path = os.path.join(root, file.split('.')[0] + ext)
-                    if os.path.exists(video_path):
-                        return video_path
-    return ""
+                    potential_video_path = os.path.join(root, file.split('.')[0] + ext)
+
+                    if os.path.exists(potential_video_path):
+                        video_paths.append(potential_video_path)
+    return video_paths
 
 def process_directory(file_dir, recurse):
     """
@@ -161,36 +163,53 @@ def process_directory(file_dir, recurse):
     unmatched_images = []
 
     if recurse:
-        for root, dir, files in os.walk(file_dir):
+        for root, dir, files in os.walk(file_dir):  # Check everything with --dir as root
             for file in files:
                 photo_path = os.path.join(root, file)
 
                 if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg')):
-                    video_path = matching_video(photo_path, file_dir)
+                    video_paths = matching_video(photo_path, file_dir)
+                    logging.info("found video paths: " + str(video_paths))
 
-                    if video_path:
-                        file_pairs.append((os.path.join(root, file), video_path))
+                    # Receives an array of potential videos, and checks them until it finds a matching ContentIdentifier
+                    if video_paths:
+                        photo_content_identifier = getexif.get_content_identifier(photo_path)                        
+                        match_found = False  # Flag to track if a match was found
+                        
+                        for video_path in video_paths:
+                            video_content_identifier = getexif.get_content_identifier(video_path)
+
+                            if photo_content_identifier is not None and \
+                                video_content_identifier is not None and \
+                                photo_content_identifier == video_content_identifier:
+                                    file_pairs.append((photo_path, video_path))
+                                    match_found = True
+                                    break  # No need to continue checking other videos
+
+                        if not match_found:
+                            unmatched_images.append(photo_path)
                     else:
                         unmatched_images.append(photo_path)
     else:
+        processed_photos = set()  # Set to store processed photo paths
+
         for file in os.listdir(file_dir):
             photo_path = os.path.join(file_dir, file)
             
             if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg')):
-                video_path = matching_video(photo_path, file_dir)
+                video_paths = matching_video(photo_path, file_dir)
 
-                if video_path:
-                    file_pairs.append((photo_path, video_path))
+                if video_paths:
+                    for video_path in video_paths:
+                        # Check if photo path is already processed
+                        if photo_path not in processed_photos:
+                            file_pairs.append((photo_path, video_path))
+                            processed_photos.add(photo_path)
                 else:
                     unmatched_images.append(photo_path)
 
     logging.info("Found {} pairs.".format(len(file_pairs)))
     logging.info("subset of found image/video pairs: {}".format(str(file_pairs[0:9])))
-
-    if unmatched_images:
-        print("Images without matching videos:")
-        for image in unmatched_images:
-            print(image)
 
     return file_pairs
 
