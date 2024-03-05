@@ -134,7 +134,9 @@ def convert(photo_path, video_path, output_path):
     offset = merged_filesize - photo_filesize
     add_xmp_metadata(merged, offset)
 
-def matching_video(photo_name, file_dir):
+def matching_video(photo_path, file_dir):
+    photo_name = os.path.splitext(os.path.basename(photo_path))[0]
+
     logging.info("Looking for videos named: {}".format(photo_name))
     video_extensions = ['.mov', '.mp4', '.MOV', '.MP4']
     for root, dir, files in os.walk(file_dir):
@@ -145,20 +147,6 @@ def matching_video(photo_name, file_dir):
                     if os.path.exists(video_path):
                         return video_path
     return ""
-
-def matching_video(photo_path):
-    base = os.path.splitext(photo_path)[0]
-    logging.info("Looking for videos named: {}".format(base))
-    if os.path.exists(base + ".mov"):
-        return base + ".mov"
-    if os.path.exists(base + ".mp4"):
-        return base + ".mp4"
-    if os.path.exists(base + ".MOV"):
-        return base + ".MOV"
-    if os.path.exists(base + ".MP4"):
-        return base + ".MP4"
-    else:
-        return ""
 
 def process_directory(file_dir, recurse):
     """
@@ -172,23 +160,29 @@ def process_directory(file_dir, recurse):
     file_pairs = []
     unmatched_images = []
 
-    # to-do: validate matches with basic metadata if using --recurse
     if recurse:
         for root, dir, files in os.walk(file_dir):
             for file in files:
-                if file.lower().endswith(('.jpg', '.jpeg')):
-                    photo_name = os.path.splitext(file)[0]
-                    video_path = matching_video(photo_name, file_dir)
+                photo_path = os.path.join(root, file)
+
+                if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg')):
+                    video_path = matching_video(photo_path, file_dir)
+
                     if video_path:
                         file_pairs.append((os.path.join(root, file), video_path))
                     else:
-                        unmatched_images.append(os.path.join(root, file))
+                        unmatched_images.append(photo_path)
     else:
         for file in os.listdir(file_dir):
-            file_fullpath = os.path.join(file_dir, file)
-            if os.path.isfile(file_fullpath) and file.lower().endswith(('.jpg', '.jpeg')) and matching_video(
-                    file_fullpath) != "":
-                file_pairs.append((file_fullpath, matching_video(file_fullpath)))
+            photo_path = os.path.join(file_dir, file)
+            
+            if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg')):
+                video_path = matching_video(photo_path, file_dir)
+
+                if video_path:
+                    file_pairs.append((photo_path, video_path))
+                else:
+                    unmatched_images.append(photo_path)
 
     logging.info("Found {} pairs.".format(len(file_pairs)))
     logging.info("subset of found image/video pairs: {}".format(str(file_pairs[0:9])))
