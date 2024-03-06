@@ -226,7 +226,9 @@ def main(args):
         validate_directory(args.dir)
 
         if args.heic:
+            logging.info("Converting all .HEIC to .JPG")
             MacConverter.convert_directory(args.dir)
+            logging.info("Finished conversion.")
         
         pairs = process_directory(args.dir, args.recurse)
         procesed_files = set()
@@ -262,7 +264,9 @@ def main(args):
 
         if validate_media(args.photo, args.video):
             if args.heic:
+                logging.info("Converting all .HEIC to .JPG")
                 MacConverter.convert_file(args.photo)
+                logging.info("Finished conversion.")
 
             convert(args.photo, args.video, outdir)
 

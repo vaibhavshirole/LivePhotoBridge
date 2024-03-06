@@ -1,24 +1,23 @@
 import os
 import sys
 import argparse
+import subprocess
 
 def convert_directory(inputDirectory):
     if not os.path.isdir(inputDirectory):
         print("Error: Input is not a directory.")
         return
-    
-    bash_command = '''
-    cd {}
-    for file in *.HEIC; 
-    do 
-        sips -s format jpeg "$file" --out "${{file%.HEIC}}.JPG"
-        
-        # Remove the HEIC file after conversion
-        rm "$file"
-    done
-    '''.format(inputDirectory)
 
-    os.system(bash_command)
+    # Change directory and run the bash command using subprocess.run
+    subprocess.run(f'''
+        cd {inputDirectory}
+        for file in *.HEIC; 
+        do 
+            sips -s format jpeg "$file" --out "${{file%.HEIC}}.JPG"
+            # Remove the HEIC file after conversion
+            rm "$file"
+        done
+    ''', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 def convert_file(inputFile):
     if not os.path.isfile(inputFile):
@@ -27,7 +26,7 @@ def convert_file(inputFile):
     
     if inputFile.lower().endswith('.heic'):
         output_file = os.path.splitext(inputFile)[0] + '.JPG'
-        os.system('sips -s format jpeg "{}" --out "{}"'.format(inputFile, output_file))
+        subprocess.run(['sips', '-s', 'format', 'jpeg', inputFile, '--out', output_file])
         print("File converted:", output_file)
     else:
         print("Error: Input file is not in HEIC format:", inputFile)
