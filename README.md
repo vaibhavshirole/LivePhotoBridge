@@ -70,6 +70,7 @@ options:
   --video VIDEO    Path to the MOV video to add.
   --output OUTPUT  Path to where files should be written out to.
   --copyall        Copy unpaired files to directory.
+  --heic           Convert all .HEIC to .JPG (macOS only)
 ~~~
 
 This will convert any HEIC to JPG when run, as the muxer 

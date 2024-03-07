@@ -6,7 +6,7 @@ import sys
 from os.path import exists, basename, isdir
 
 import getexif
-import MacConverter
+# import MacConverter
 
 import pyexiv2
 
@@ -135,10 +135,10 @@ def convert(photo_path, video_path, output_path):
     offset = merged_filesize - photo_filesize
     add_xmp_metadata(merged, offset)
 
-    # Adjust the output file name to have ".MP.jpg" extension, to fit Google's naming convention
+"""     # Adjust the output file name to have ".MP.jpg" extension, to fit Google's naming convention
     output_file = os.path.splitext(merged)[0] + ".MP.jpg"
     os.rename(merged, output_file)  # Rename the file to the new name
-    logging.info("Renamed output file to: {}".format(output_file))
+    logging.info("Renamed output file to: {}".format(output_file)) """
 
 def matching_video(photo_path, file_dir):
     photo_name = os.path.splitext(os.path.basename(photo_path))[0]
@@ -232,7 +232,7 @@ def main(args):
 
         if args.heic:
             logging.info("Converting all .HEIC to .JPG")
-            MacConverter.convert_directory(args.dir)
+            # MacConverter.convert_directory(args.dir)
             logging.info("Finished conversion.")
         
         pairs = process_directory(args.dir, args.recurse)
@@ -270,7 +270,7 @@ def main(args):
         if validate_media(args.photo, args.video):
             if args.heic:
                 logging.info("Converting all .HEIC to .JPG")
-                MacConverter.convert_file(args.photo)
+                # MacConverter.convert_file(args.photo)
                 logging.info("Finished conversion.")
 
             convert(args.photo, args.video, outdir)
