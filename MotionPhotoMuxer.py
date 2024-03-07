@@ -34,7 +34,7 @@ def validate_media(photo_path, video_path):
         logging.error("Video does not exist: {}".format(video_path))
         return False
     if not photo_path.lower().endswith(('.jpg', '.jpeg')):
-        logging.error("Photo isn't a JPEG: {}".format(photo_path))
+        logging.error("Photo isn't a JPEG. Run with --heic to convert: {}".format(photo_path))
         return False
     if not video_path.lower().endswith(('.mov', '.mp4')):
         logging.error("Video isn't a MOV or MP4: {}".format(photo_path))
@@ -134,6 +134,11 @@ def convert(photo_path, video_path, output_path):
     # where the video portion of the merged file begins. In other words, merged size - photo_only_size = offset.
     offset = merged_filesize - photo_filesize
     add_xmp_metadata(merged, offset)
+
+    # Adjust the output file name to have ".MP.jpg" extension, to fit Google's naming convention
+    output_file = os.path.splitext(merged)[0] + ".MP.jpg"
+    os.rename(merged, output_file)  # Rename the file to the new name
+    logging.info("Renamed output file to: {}".format(output_file))
 
 def matching_video(photo_path, file_dir):
     photo_name = os.path.splitext(os.path.basename(photo_path))[0]
@@ -279,7 +284,7 @@ if __name__ == '__main__':
                                                 '--photo/--video')
     parser.add_argument('--recurse', help='Recursively process a directory. Only applies if --dir is also provided',
                         action='store_true')
-    parser.add_argument('--photo', type=str, help='Path to the JPEG photo to add.')
+    parser.add_argument('--photo', type=str, help='Path to the JPEG photo to add (run with --heic to convert .HEIC).')
     parser.add_argument('--video', type=str, help='Path to the MOV video to add.')
     parser.add_argument('--output', type=str, help='Path to where files should be written out to.')
     parser.add_argument('--copyall', help='Copy unpaired files to directory.', action='store_true')
