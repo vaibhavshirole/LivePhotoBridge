@@ -1,4 +1,4 @@
-f = open('/Users/vaibhav/Downloads/IMG_4965.JPG', 'rb')
+f = open('/Users/vaibhav/Desktop/IMG_3669.jpeg', 'rb')
 d = f.read()
 xmp_start = d.find(b'<x:xmpmeta')
 xmp_end = d.find(b'</x:xmpmeta')

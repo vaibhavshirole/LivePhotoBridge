@@ -1,6 +1,3 @@
-# below is a working script to get a text file of all exif
-# exiftool -a -u -g1 -ee3 -api RequestAll=3 IMG_5002.JPG >IMG_5002.JPG_exif.txt
-
 import os
 import sys
 import argparse
@@ -64,10 +61,11 @@ if __name__ == '__main__':
     arg_parser = create_arg_parser()
     parsed_args = arg_parser.parse_args(sys.argv[1:])
 
-    output_file =  "JPG_exif.txt"  # Output file will show up in whatever directory this script is in
-
     if parsed_args.file:
         if os.path.exists(parsed_args.file):
+
+            output_directory = os.path.dirname(parsed_args.file)
+            output_file = os.path.join(output_directory, os.path.splitext(os.path.basename(parsed_args.file))[0] + '_exif.txt')
 
             print(get_metadata_fields(parsed_args.file))
             print("")
