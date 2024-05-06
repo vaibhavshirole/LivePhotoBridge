@@ -1,11 +1,19 @@
-import os
+import subprocess
 
-def write_files_to_text(directory_path, output_file):
-    with open(output_file, 'w') as file:
-        for filename in os.listdir(directory_path):
-            file.write(filename + '\n')
+"/Users/vaibhav/Desktop/PXL_20240228_214454169.MP.jpg"
+"/Users/vaibhav/Downloads/out/IMG_3693.jpeg"
+"/Users/vaibhav/Desktop/IMG_3693.MP.JPG"
 
-# Example usage:
-directory_path = '/Users/vaibhav/Downloads/2021/oct-dec'
-output_file = 'file_list.txt'
-write_files_to_text(directory_path, output_file)
+# Construct the ExifTool command
+command = ['exiftool', '-xmp', '-b', "/Users/vaibhav/Downloads/out/IMG_3693.heic"]
+
+try:
+    # Run the command and capture the output
+    result = subprocess.run(command, capture_output=True, text=True, check=True)
+    
+    # Output the XMP metadata
+    print(result.stdout)
+
+except subprocess.CalledProcessError as e:
+    # Handle any errors
+    print("Error:", e)

@@ -37,7 +37,7 @@ def get_run_time_scale(filename):
     metadata = get_metadata_fields(filename)
     return metadata.get('Run Time Scale')
 
-def extract_exif_data(input_file, output_file):
+def save_metadata(input_file, output_file):
     command = [
         "exiftool",
         "-a",
@@ -90,7 +90,7 @@ if __name__ == '__main__':
                 print("Content Identifier does not exist in the metadata.")
 
             if parsed_args.outfile:
-                extract_exif_data(parsed_args.file, output_file)
+                save_metadata(parsed_args.file, output_file)
             
         else:
             print("File does not exist:", parsed_args.file)

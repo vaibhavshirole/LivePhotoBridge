@@ -3,15 +3,13 @@ import logging
 import os
 import shutil
 import sys
+import subprocess
 from os.path import exists, basename, isdir
 
-import getexif
-# import MacConverter
-
-import pyexiv2
+import getexif       # script to get exif data using exiftool
+import MacConverter  # use sips to convert heic to jpg
 
 def validate_directory(dir):
-    
     if not exists(dir):
         logging.error("Path doesn't exist: {}".format(dir))
         exit(1)
@@ -33,7 +31,7 @@ def validate_media(photo_path, video_path):
     if not exists(video_path):
         logging.error("Video does not exist: {}".format(video_path))
         return False
-    if not photo_path.lower().endswith(('.jpg', '.jpeg')):
+    if not photo_path.lower().endswith(('.jpg', '.jpeg', '.heic')):
         logging.error("Photo isn't a JPEG. Run with --heic to convert: {}".format(photo_path))
         return False
     if not video_path.lower().endswith(('.mov', '.mp4')):
@@ -54,9 +52,7 @@ def merge_files(photo_path, video_path, output_path):
     with open(out_path, "wb") as outfile, open(photo_path, "rb") as photo, open(video_path, "rb") as video:
         outfile.write(photo.read())
         outfile.write(video.read())
-    logging.info("Merged photo and video.")
     return out_path
-
 
 def add_xmp_metadata(merged_file, offset):
     """Adds XMP metadata to the merged image indicating the byte offset in the file where the video begins.
@@ -64,60 +60,30 @@ def add_xmp_metadata(merged_file, offset):
     :param offset: The number of bytes from EOF to the beginning of the video.
     :return: None
     """
-    metadata = pyexiv2.ImageMetadata(merged_file)
-    logging.info("Reading existing metadata from file.")
-    metadata.read()
-    logging.info("Found XMP keys: " + str(metadata.xmp_keys))
-    if len(metadata.xmp_keys) > 0:
-        logging.warning("Found existing XMP keys. They *may* be affected after this process.")
+    metadata = getexif.get_metadata_fields(merged_file)
+    LivePhotoVideoIndex = int(metadata.get('Live Photo Video Index'))
+    RunTimeScale = int(metadata.get('Run Time Scale'))
+    MicroVideoPresentationTimestampUs = int((LivePhotoVideoIndex/RunTimeScale)*1000000)
 
-    # (py)exiv2 raises an exception here on basically all my 'test' iPhone 13 photos -- I'm not sure why,
-    # but it seems safe to ignore so far. It's logged anyways just in case.
-    
-    LivePhotoVideoIndex = int(getexif.get_live_photo_video_index(merged_file))
-    RunTimeScale = int(getexif.get_run_time_scale(merged_file))
-    MicroVideoPresentationTimestampUs = (LivePhotoVideoIndex/RunTimeScale)*1000000
-
-    # register GCamera 
+    # Define the ExifTool command to add MotionPhoto properties
+    exiftool_cmd = [
+        'exiftool', 
+        '-config', '/Users/vaibhav/Developer/projects/PhotoMuxer/exiftool/google_camera.config', 
+        '-overwrite_original', 
+        '-m',
+        '-q',
+        '-XMP-GCamera:MicroVideo=1', 
+        '-XMP-GCamera:MicroVideoVersion=1', 
+        '-XMP-GCamera:MicroVideoOffset=' + str(offset) + '', 
+        '-XMP-GCamera:MicroVideoPresentationTimestampUs=' + str(MicroVideoPresentationTimestampUs) + '', 
+        merged_file
+    ]
     try:
-        pyexiv2.xmp.register_namespace('http://ns.google.com/photos/1.0/camera/', 'GCamera')
-    except KeyError:
-        logging.warning("exiv2 detected that the GCamera namespace already exists.".format(merged_file))
+        subprocess.run(exiftool_cmd)
+    except subprocess.CalledProcessError as e:
+        print("Error, adding_xmp_metadata:", e)
 
-    # register Container
-    try:
-        pyexiv2.xmp.register_namespace('http://ns.adobe.com/xap/1.0/device/', 'Container')
-    except KeyError:
-        logging.warning("exiv2 detected that the Container namespace already exists.".format(merged_file))
-
-    metadata['Xmp.GCamera.MicroVideo'] = pyexiv2.XmpTag('Xmp.GCamera.MicroVideo', 1)
-    metadata['Xmp.GCamera.MicroVideoVersion'] = pyexiv2.XmpTag('Xmp.GCamera.MicroVideoVersion', 1)
-    metadata['Xmp.GCamera.MicroVideoOffset'] = pyexiv2.XmpTag('Xmp.GCamera.MicroVideoOffset', offset)
-    metadata['Xmp.GCamera.MicroVideoPresentationTimestampUs'] = pyexiv2.XmpTag(
-        'Xmp.GCamera.MicroVideoPresentationTimestampUs', MicroVideoPresentationTimestampUs)
-    
-    # to-do: convert to MotionPhoto
-    # https://gitlab.gnome.org/GNOME/shotwell/-/issues/233#note_1064700 
-    # directory_items = [
-    # {
-    #         'Mime': 'image/jpeg',
-    #         'Semantic': 'Primary',
-    #         'Length': 0,
-    #         'Padding': 0
-    #     },
-    #     {
-    #         'Mime': 'video/mp4',
-    #         'Semantic': 'MotionPhoto',
-    #         'Length': 1601147,
-    #         'Padding': 0
-    #     }
-    # ]
-    # for i, item in enumerate(directory_items):
-    #     for key, value in item.items():
-    #         metadata[f'Xmp.Container.DirectoryItem{i}.{key}'] = pyexiv2.XmpTag(f'Xmp.Container.DirectoryItem{i}.{key}', value) 
-
-    metadata.write()
-
+    return
 
 def convert(photo_path, video_path, output_path):
     """
@@ -126,19 +92,20 @@ def convert(photo_path, video_path, output_path):
     :param video_path: path to the video to merge
     :return: True if conversion was successful, else False
     """
-    merged = merge_files(photo_path, video_path, output_path)
-    photo_filesize = os.path.getsize(photo_path)
-    merged_filesize = os.path.getsize(merged)
+    try:
+        merged = merge_files(photo_path, video_path, output_path)
+        photo_filesize = os.path.getsize(photo_path)
+        merged_filesize = os.path.getsize(merged)
 
-    # The 'offset' field in the XMP metadata should be the offset (in bytes) from the end of the file to the part
-    # where the video portion of the merged file begins. In other words, merged size - photo_only_size = offset.
-    offset = merged_filesize - photo_filesize
-    add_xmp_metadata(merged, offset)
+        # The 'offset' field in the XMP metadata should be the offset (in bytes) from the end of the file to the part
+        # where the video portion of the merged file begins. In other words, merged size - photo_only_size = offset.
+        offset = merged_filesize - photo_filesize
 
-"""     # Adjust the output file name to have ".MP.jpg" extension, to fit Google's naming convention
-    output_file = os.path.splitext(merged)[0] + ".MP.jpg"
-    os.rename(merged, output_file)  # Rename the file to the new name
-    logging.info("Renamed output file to: {}".format(output_file)) """
+        add_xmp_metadata(merged, offset)
+        return True
+    except Exception as e:
+        print(f"Error during conversion: {e}")
+        return False
 
 def matching_video(photo_path, file_dir):
     photo_name = os.path.splitext(os.path.basename(photo_path))[0]
@@ -173,7 +140,7 @@ def process_directory(file_dir, recurse):
             for file in files:
                 photo_path = os.path.join(root, file)
 
-                if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg')):
+                if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg', '.heic')):
                     video_paths = matching_video(photo_path, file_dir)
                     logging.info("found video paths: " + str(video_paths))
 
@@ -202,7 +169,7 @@ def process_directory(file_dir, recurse):
         for file in os.listdir(file_dir):
             photo_path = os.path.join(file_dir, file)
             
-            if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg')):
+            if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg', '.heic')):
                 video_paths = matching_video(photo_path, file_dir)
 
                 if video_paths:
@@ -219,7 +186,6 @@ def process_directory(file_dir, recurse):
 
     return file_pairs
 
-
 def main(args):
     logging_level = logging.INFO if args.verbose else logging.ERROR
     logging.basicConfig(level=logging_level, stream=sys.stdout)
@@ -232,21 +198,21 @@ def main(args):
 
         if args.heic:
             logging.info("Converting all .HEIC to .JPG")
-            # MacConverter.convert_directory(args.dir)
+            MacConverter.convert_directory(args.dir)
             logging.info("Finished conversion.")
         
         pairs = process_directory(args.dir, args.recurse)
-        procesed_files = set()
+        processed_files = set()
         for pair in pairs:
             if validate_media(pair[0], pair[1]):
                 convert(pair[0], pair[1], outdir)
-                procesed_files.add(pair[0])
-                procesed_files.add(pair[1])
+                processed_files.add(pair[0])
+                processed_files.add(pair[1])
 
         if args.copyall:
             # Copy the remaining files to outdir
             all_files = set(os.path.join(args.dir, file) for file in os.listdir(args.dir))
-            remaining_files = all_files - procesed_files
+            remaining_files = all_files - processed_files
 
             logging.info("Found {} remaining files that will copied.".format(len(remaining_files)))
 
@@ -270,7 +236,7 @@ def main(args):
         if validate_media(args.photo, args.video):
             if args.heic:
                 logging.info("Converting all .HEIC to .JPG")
-                # MacConverter.convert_file(args.photo)
+                MacConverter.convert_file(args.photo)
                 logging.info("Finished conversion.")
 
             convert(args.photo, args.video, outdir)

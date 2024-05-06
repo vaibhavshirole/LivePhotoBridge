@@ -12,18 +12,25 @@ def convert_heic_to_jpg(input_file, output_file):
         '--out', output_file
     ]
     subprocess.run(command)
+    os.remove(input_file)
 
 def convert_directory(input_directory):
     if not os.path.isdir(input_directory):
         print("Error: Input is not a directory.")
         return
 
-    for file_name in os.listdir(input_directory):
-        if file_name.lower().endswith('.heic'):
-            input_file = os.path.join(input_directory, file_name)
-            output_file = os.path.splitext(input_file)[0] + '.JPG'
-            convert_heic_to_jpg(input_file, output_file)
-    return 
+    command = [
+        'find', input_directory, '-type', 'f', '-iname', '*.heic',
+        '|', 'while', 'read', 'i;', 'do',
+        'fileNoExt="${i%.*}";',
+        'jpgFile="${fileNoExt}.JPG";',
+        'sips', '-s', 'format', 'jpeg', '-s', 'formatOptions', '100', '"$i"', '--out', '"$jpgFile";',
+        'touch', '-r', '"$i"', '"$jpgFile";',
+        'rm', '"$i";',
+        'done'
+    ]
+    with open(os.devnull, 'w') as devnull:
+        subprocess.run(' '.join(command), shell=True, stdout=devnull)
 
 def convert_file(input_file):
     if not os.path.isfile(input_file):
