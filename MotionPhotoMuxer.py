@@ -31,7 +31,7 @@ def validate_media(photo_path, video_path):
     if not exists(video_path):
         logging.error("Video does not exist: {}".format(video_path))
         return False
-    if not photo_path.lower().endswith(('.jpg', '.jpeg', '.heic')):
+    if not photo_path.lower().endswith(('.jpg', '.jpeg')):
         logging.error("Photo isn't a JPEG. Run with --heic to convert: {}".format(photo_path))
         return False
     if not video_path.lower().endswith(('.mov', '.mp4')):
@@ -81,9 +81,23 @@ def add_xmp_metadata(merged_file, offset):
     try:
         subprocess.run(exiftool_cmd)
     except subprocess.CalledProcessError as e:
-        print("Error, adding_xmp_metadata:", e)
+        logging.error("Error, adding_xmp_metadata:", e)
 
     return
+
+def mp_clarify(file_path):
+    # Split the file path into directory, base name, and extension
+    directory, filename = os.path.split(file_path)
+    basename, extension = os.path.splitext(filename)
+    
+    # Add .MP to the base name
+    new_filename = f"{basename}.MP{extension}"
+    
+    # Reconstruct the full file path
+    new_file_path = os.path.join(directory, new_filename)
+    
+    os.rename(file_path, new_file_path)
+    return new_file_path
 
 def convert(photo_path, video_path, output_path):
     """
@@ -101,10 +115,15 @@ def convert(photo_path, video_path, output_path):
         # where the video portion of the merged file begins. In other words, merged size - photo_only_size = offset.
         offset = merged_filesize - photo_filesize
 
+        logging.info("Adding metadata, video offset: " + str(offset))
         add_xmp_metadata(merged, offset)
+        
+        logging.info("Adding .MP into filename")
+        mp_clarify(merged)
+
         return True
     except Exception as e:
-        print(f"Error during conversion: {e}")
+        logging.error(f"Error during conversion: {e}")
         return False
 
 def matching_video(photo_path, file_dir):
@@ -140,7 +159,7 @@ def process_directory(file_dir, recurse):
             for file in files:
                 photo_path = os.path.join(root, file)
 
-                if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg', '.heic')):
+                if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg')):
                     video_paths = matching_video(photo_path, file_dir)
                     logging.info("found video paths: " + str(video_paths))
 
@@ -169,7 +188,7 @@ def process_directory(file_dir, recurse):
         for file in os.listdir(file_dir):
             photo_path = os.path.join(file_dir, file)
             
-            if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg', '.heic')):
+            if os.path.isfile(photo_path) and file.lower().endswith(('.jpg', '.jpeg')):
                 video_paths = matching_video(photo_path, file_dir)
 
                 if video_paths:

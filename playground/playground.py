@@ -1,19 +1,29 @@
 import subprocess
+import sys
 
-"/Users/vaibhav/Desktop/PXL_20240228_214454169.MP.jpg"
-"/Users/vaibhav/Downloads/out/IMG_3693.jpeg"
-"/Users/vaibhav/Desktop/IMG_3693.MP.JPG"
+offset = 4254557
+MicroVideoPresentationTimestampUs = 575676
 
-# Construct the ExifTool command
-command = ['exiftool', '-xmp', '-b', "/Users/vaibhav/Downloads/out/IMG_3693.heic"]
+merged_file = sys.argv[1]
+print(merged_file)
 
+exiftool_cmd = [
+    'exiftool', 
+    '-config', '/Users/vaibhav/Developer/projects/PhotoMuxer/exiftool/google_camera.config', 
+    '-overwrite_original', 
+    '-m',
+    '-q',
+    '-XMP-GCamera:MicroVideo=1', 
+    '-XMP-GCamera:MicroVideoVersion=1', 
+    '-XMP-GCamera:MicroVideoOffset=' + str(offset) + '', 
+    '-XMP-GCamera:MicroVideoPresentationTimestampUs=' + str(MicroVideoPresentationTimestampUs) + '', 
+    '-XMP-Item:Mime=image/jpeg', 
+    '-XMP-Item:Semantic=Primary', 
+    '-XMP-Item:Length=0', 
+    '-XMP-Item:Padding=0', 
+    merged_file
+]
 try:
-    # Run the command and capture the output
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
-    
-    # Output the XMP metadata
-    print(result.stdout)
-
+    subprocess.run(exiftool_cmd)
 except subprocess.CalledProcessError as e:
-    # Handle any errors
-    print("Error:", e)
+    print("Error, adding_xmp_metadata:", e)
