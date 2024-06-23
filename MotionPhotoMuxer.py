@@ -221,7 +221,7 @@ def main(args):
             logging.info("Finished conversion.")
         
         pairs = process_directory(args.dir, args.recurse)
-        processed_files = set()
+        processed_files = set() # holds all the photo+video pairs that match
         for pair in pairs:
             if validate_media(pair[0], pair[1]):
                 convert(pair[0], pair[1], outdir)
@@ -229,20 +229,27 @@ def main(args):
                 processed_files.add(pair[1])
 
         if args.copyall:
-            # Copy the remaining files to outdir
-            all_files = set(os.path.join(args.dir, file) for file in os.listdir(args.dir))
+            # Walk the directory tree and gather all file paths
+            all_files = set()
+            for dirpath, _, filenames in os.walk(args.dir):
+                for filename in filenames:
+                    all_files.add(os.path.join(dirpath, filename))
+
+            # Subtract the processed files to get the remaining files
             remaining_files = all_files - processed_files
 
-            logging.info("Found {} remaining files that will copied.".format(len(remaining_files)))
+            logging.info("Found {} remaining files that will be copied.".format(len(remaining_files)))
 
             if len(remaining_files) > 0:
                 # Ensure the destination directory exists
                 os.makedirs(outdir, exist_ok=True)
                 
                 for file in remaining_files:
-                    file_name = os.path.basename(file)
-                    destination_path = os.path.join(outdir, file_name)
-                    shutil.copy2(file, destination_path)
+                    if os.path.isfile(file):  # Check if the path is a file
+                        file_name = os.path.basename(file)
+                        destination_path = os.path.join(outdir, file_name)
+                        shutil.copy2(file, destination_path)
+                        logging.info("Copied file: " + str(file))
     else:
         if args.photo is None and args.video is None:
             logging.error("Either --dir or --photo and --video are required.")
