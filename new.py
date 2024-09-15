@@ -6,6 +6,7 @@ import subprocess
 from os.path import exists, basename, isdir
 
 import getexif       # script to get exif data using exiftool
+import MacConverter  # script to convert .heic to .jpg
 
 """
 Validate inputs
@@ -54,9 +55,9 @@ def create_livephoto_dir(input_path):
     jpgfiles = [os.path.join(root, name)
             for root, dirs, files in os.walk(input_path)
             for name in files
-            if name.endswith((".JPG", ".MP4"))]
+            if name.endswith((".JPG", ".jpg", ".jpeg", ".JPEG", ".MP4", ".mp4", ".mov", ".MOV"))]
     
-    #print(jpgfiles)
+    print("jpgfiles: ", jpgfiles)
             
     for filepath in jpgfiles:
         # Get the filename and extension from the filepath
@@ -85,7 +86,7 @@ def create_media_dir(input_path):
     mediafiles = [os.path.join(root, name)
             for root, dirs, files in os.walk(input_path)
             for name in files
-            if name.endswith((".jpg", ".jpeg", ".JPEG", ".png", ".PNG", ".gif", ".GIF", ".mov", ".MOV", ".mp4"))]
+            if name.endswith((".PNG", ".png", ".GIF", ".gif"))]
     
     #print(mediafiles)
             
@@ -167,10 +168,11 @@ def find_livephoto_pairs(livephoto_path):
     
     # Walk through the directory to list JPG and MP4 files
     for root, dirs, files in os.walk(livephoto_path):
+        print(files)
         for name in files:
-            if name.lower().endswith(".jpg"):
+            if name.lower().endswith((".JPG", ".jpg", ".JPEG", ".jpeg")):
                 jpg_files.append(os.path.join(root, name))
-            elif name.lower().endswith(".mp4"):
+            elif name.lower().endswith((".MP4", ".mp4", ".MOV", ".mov")):
                 mp4_files.append(os.path.join(root, name))
 
     # Dictionary to store JPG files and their potential MP4 matches
@@ -202,6 +204,7 @@ def merge_files(photo_path, video_path, output_path):
     :param video_path: Path to the video
     :return: File name of the merged output file
     """
+    print("")
     print("Merging {} and {}.".format(photo_path, video_path))
     out_path = os.path.join(output_path, "{}".format(basename(photo_path)))
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -292,6 +295,7 @@ def convert(photo_path, video_path, output_path):
 #   - .MP4 is what apple saves as livephotovideo
 #   - .MOV is what apple saves as regular videos
 #   - .jpg is what telegram and random other compressed photos are 
+#   - .HEIC vs .heic (lowercase is when exported as modified from Apple Photos Mac app)
 
 # search through all .JPG for content id 
 
@@ -307,10 +311,17 @@ def convert(photo_path, video_path, output_path):
 def main(args):
     outdir = args.output if args.output is not None else "output"
 
+
+    # Make dir
     if args.dir is not None:
-        
+
         if validate_directory(args.dir) is not None:
             exit(1)
+
+        if args.heic:
+            print("Converting .HEIC to .JPG")
+            MacConverter.convert_directory(args.dir)
+            print("Finished conversion.")
 
         input_path = args.dir
 
@@ -352,11 +363,12 @@ def main(args):
             #print(f"JPG: {jpg}, MP4: {mp4}")
 
             # Convert and merge photo and video into .MP
-            convert(jpg, mp4, motionphoto_path)
+            res = convert(jpg, mp4, motionphoto_path)
 
-            # Delete the original photo and video
-            delete_file(jpg)
-            delete_file(mp4)
+            # Delete the original photo and video if matched
+            if res:
+                delete_file(jpg)
+                delete_file(mp4)
 
         print("\nPhotos with multiple videos:")
         for jpg, mp4_list in photos_with_multiple_videos:
@@ -368,13 +380,16 @@ def main(args):
             for mp4 in mp4_list:
                 video_content_id = getexif.get_content_identifier(mp4)
                 if photo_content_id == video_content_id:
+
                     # If match found, convert and merge # print(f"Match found: {jpg} and {mp4}")
-                    convert(jpg, mp4, motionphoto_path)
-                    
-                    # Delete the original photo and video
-                    delete_file(jpg)
-                    delete_file(mp4)
-                    matched = True
+                    res = convert(jpg, mp4, motionphoto_path)
+
+                    # Delete the original photo and video if match successful
+                    if res:
+                        delete_file(jpg)
+                        delete_file(mp4)
+                        matched = True
+
                     break
             if not matched:
                 # If no match, keep separate
@@ -384,7 +399,8 @@ def main(args):
         new_folder_name = "review_unmatched"
         new_path = os.path.join(os.path.dirname(livephoto_path), new_folder_name)
         os.rename(livephoto_path, new_path)
-        
+
+    # Make single (NOT IMPLMENETED)    
     else:
         if args.photo is None and args.video is None:
             print("Either --dir or --photo and --video are required.")
@@ -395,9 +411,7 @@ def main(args):
             exit(1)
 
         if validate_media(args.photo, args.video):
-
-            print("Converting all .HEIC to .JPG")
-            print("Finished conversion.")
+            exit(1)
 
 
 if __name__ == '__main__':
@@ -410,5 +424,6 @@ if __name__ == '__main__':
     parser.add_argument('--photo', type=str, help='Path to the JPEG photo to add (run with --heic to convert .HEIC).')
     parser.add_argument('--video', type=str, help='Path to the MOV video to add.')
     parser.add_argument('--output', type=str, help='Path to where files should be written out to.')
+    parser.add_argument('--heic', help='Convert all .HEIC to .JPG (macOS only)', action='store_true')
 
     main(parser.parse_args())

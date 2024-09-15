@@ -1,0 +1,303 @@
+---- ExifTool ----
+ExifTool Version Number         : 12.76
+Now                             : 2024:05:29 17:50:25-07:00
+New GUID                        : 20240529-1750-2500-4DBE-012BB55CDF07
+File Sequence                   : 0
+Processing Time                 : 0.0999 s
+---- System ----
+File Name                       : IMG_3693.HEIC
+Base Name                       : IMG_3693
+Directory                       : /Users/vaibhav/Desktop
+File Path                       : /Users/vaibhav/Desktop/IMG_3693.HEIC
+File Size                       : 2.4 MB
+File Modification Date/Time     : 2024:04:27 18:43:20-07:00
+File Access Date/Time           : 2024:05:29 17:22:53-07:00
+File Inode Change Date/Time     : 2024:05:29 17:22:03-07:00
+File Permissions                : -rw-------
+File Attributes                 : Regular; (none)
+File Device Number              : 16777230
+File Inode Number               : 114469039
+File Hard Links                 : 1
+File User ID                    : vaibhav
+File Group ID                   : staff
+File Device ID                  : 0.0
+File Block Size                 : 4096
+File Block Count                : 4768
+---- MacOS ----
+File Creation Date/Time         : 2024:04:27 18:43:20-07:00
+KMD Item Display Name With Extensions: IMG_3693.HEIC
+MD Item Acquisition Make        : Apple
+MD Item Acquisition Model       : iPhone 11 Pro
+MD Item Altitude                : 421.6935840707965
+MD Item Aperture                : 2
+MD Item Bits Per Sample         : 24
+MD Item Color Space             : RGB
+MD Item Content Creation Date   : 2024:04:27 18:43:20-07:00
+MD Item Content Creation Date Ranking: 2024:05:29 17:00:00-07:00
+MD Item Content Modification Date: 2024:04:27 18:43:20-07:00
+MD Item Content Type            : public.heic
+MD Item Content Type Tree       : public.heic, public.heif-standard, public.image, public.data, public.item, public.content
+MD Item Creator                 : 17.4.1
+MD Item Date Added              : 2024:05:29 17:10:52-07:00
+MD Item Display Name            : IMG_3693.HEIC
+MD Item Document Identifier     : 0
+MD Item EXIF Version            : 2.3.2
+MD Item Exposure Mode           : 0
+MD Item Exposure Program        : 2
+MD Item Exposure Time Seconds   : 0.003289473684210526
+MD Item Flash On Off            : 0
+MD Item F Number                : 2
+MD Item Focal Length            : 6
+MD Item Focal Length 35mm       : 52
+MD Item FS Content Change Date  : 2024:04:27 18:43:20-07:00
+MD Item FS Creation Date        : 2024:04:27 18:43:20-07:00
+MD Item FS Creator Code         : 
+MD Item FS Finder Flags         : 0
+MD Item FS Has Custom Icon      : 
+MD Item FS Invisible            : 0
+MD Item FS Is Extension Hidden  : 0
+MD Item FS Is Stationery        : 
+MD Item FS Label                : 0 (none)
+MD Item FS Name                 : IMG_3693.HEIC
+MD Item FS Node Count           : 
+MD Item FS Owner Group ID       : 20
+MD Item FS Owner User ID        : 501
+MD Item FS Size                 : 2439045
+MD Item FS Type Code            : 
+MD Item GPS Date Stamp          : 2024:04:28
+MD Item GPS Dest Bearing        : 117.7846526097477
+MD Item Has Alpha Channel       : 0
+MD Item Image Direction         : 117.7846526097477
+MD Item Interesting Date Ranking: 2024:05:29 17:00:00-07:00
+MD Item ISO Speed               : 20
+MD Item Kind                    : HEIF Image
+MD Item Last Used Date          : 2024:05:29 17:22:03-07:00
+MD Item Last Used Date Ranking  : 2024-05-30 00:00:00 +0000
+MD Item Latitude                : 33.57497
+MD Item Logical Size            : 2439045
+MD Item Longitude               : -111.856645
+MD Item Metering Mode           : 5
+MD Item Orientation             : 1
+MD Item Physical Size           : 2441216
+MD Item Pixel Count             : 12192768
+MD Item Pixel Height            : 4032
+MD Item Pixel Width             : 3024
+MD Item Profile Name            : Display P3
+MD Item Red Eye On Off          : 0
+MD Item Resolution Height DPI   : 72
+MD Item Resolution Width DPI    : 72
+MD Item Speed                   : 0.01338376477357905
+MD Item Timestamp               : 01:43:18
+MD Item Use Count               : 5
+MD Item Used Dates              : 2024:05:29 00:00:00-07:00
+MD Item White Balance           : 0
+X Attr Last Used Date           : 2024:05:30 00:22:03
+X Attr Macl                     : (Binary data 72 bytes, use -b option to extract)
+X Attr Quarantine               : Flags=0082 set at 2024:05:30 00:10:52 by Photos
+---- File ----
+File Type                       : HEIC
+File Type Extension             : heic
+MIME Type                       : image/heic
+Exif Byte Order                 : Big-endian (Motorola, MM)
+Image Width                     : 4032
+Image Height                    : 3024
+---- QuickTime ----
+Major Brand                     : High Efficiency Image Format HEVC still image (.HEIC)
+Minor Version                   : 0.0.0
+Compatible Brands               : mif1, MiPr, miaf, MiHB, heic
+Handler Type                    : Picture
+HEVC Configuration Version      : 1
+General Profile Space           : Conforming
+General Tier Flag               : Main Tier
+General Profile IDC             : Main Still Picture
+Gen Profile Compatibility Flags : Main Still Picture, Main 10, Main
+Constraint Indicator Flags      : 176 0 0 0 0 0
+General Level IDC               : 90 (level 3.0)
+Min Spatial Segmentation IDC    : 0
+Parallelism Type                : 0
+Chroma Format                   : 4:2:0
+Bit Depth Luma                  : 8
+Bit Depth Chroma                : 8
+Average Frame Rate              : 0
+Constant Frame Rate             : Unknown
+Num Temporal Layers             : 1
+Temporal ID Nested              : No
+Image Spatial Extent            : 512x512
+Image Spatial Extent            : 4032x3024
+Rotation                        : 270
+Image Pixel Depth               : 8 8 8
+HEVC Configuration Version      : 1
+General Profile Space           : Conforming
+General Tier Flag               : Main Tier
+General Profile IDC             : Main Still Picture
+Gen Profile Compatibility Flags : Main Still Picture, Main 10, Main
+Constraint Indicator Flags      : 176 0 0 0 0 0
+General Level IDC               : 60 (level 2.0)
+Min Spatial Segmentation IDC    : 0
+Parallelism Type                : 0
+Chroma Format                   : 4:2:0
+Bit Depth Luma                  : 8
+Bit Depth Chroma                : 8
+Average Frame Rate              : 0
+Constant Frame Rate             : Unknown
+Num Temporal Layers             : 1
+Temporal ID Nested              : No
+Image Spatial Extent            : 320x240
+Media Data Size                 : 2435626
+Media Data Offset               : 3419
+Media Data                      : (Binary data 2435626 bytes, use -b option to extract)
+---- Meta ----
+Primary Item Reference          : 49
+Meta Image Size                 : 4032x3024
+---- IFD0 ----
+Make                            : Apple
+Camera Model Name               : iPhone 11 Pro
+Orientation                     : Rotate 90 CW
+X Resolution                    : 72
+Y Resolution                    : 72
+Resolution Unit                 : inches
+Software                        : 17.4.1
+Modify Date                     : 2024:04:27 18:43:20
+Host Computer                   : iPhone 11 Pro
+---- ExifIFD ----
+Exposure Time                   : 1/304
+F Number                        : 2.0
+Exposure Program                : Program AE
+ISO                             : 20
+Exif Version                    : 0232
+Date/Time Original              : 2024:04:27 18:43:20
+Create Date                     : 2024:04:27 18:43:20
+Offset Time                     : -07:00
+Offset Time Original            : -07:00
+Offset Time Digitized           : -07:00
+Shutter Speed Value             : 1/304
+Aperture Value                  : 2.0
+Brightness Value                : 7.634080142
+Exposure Compensation           : 0
+Metering Mode                   : Multi-segment
+Flash                           : Off, Did not fire
+Focal Length                    : 6.0 mm
+Subject Area                    : 2011 1502 2314 1387
+Sub Sec Time Original           : 585
+Sub Sec Time Digitized          : 585
+Color Space                     : Uncalibrated
+Exif Image Width                : 4032
+Exif Image Height               : 3024
+Sensing Method                  : One-chip color area
+Scene Type                      : Directly photographed
+Exposure Mode                   : Auto
+White Balance                   : Auto
+Focal Length In 35mm Format     : 52 mm
+Lens Info                       : 1.539999962-6mm f/1.8-2.4
+Lens Make                       : Apple
+Lens Model                      : iPhone 11 Pro back triple camera 6mm f/2
+Composite Image                 : General Composite Image
+---- Apple ----
+Maker Note Version              : 14
+Run Time Flags                  : Valid
+Run Time Value                  : 363682498553458
+Run Time Scale                  : 1000000000
+Run Time Epoch                  : 0
+AE Stable                       : Yes
+AE Target                       : 176
+AE Average                      : 181
+AF Stable                       : Yes
+Acceleration Vector             : 0.01946859993 -1.002479314 0.01969573089
+Focus Distance Range            : 1.71 - 2.51 m
+Apple 0x000d                    : 51
+Apple 0x000e                    : 0
+Apple 0x0010                    : 1
+Content Identifier              : 5B67ECE4-1ADA-4959-B2CE-195673E1E6A4
+Image Capture Type              : Unknown (12)
+Live Photo Video Index          : 575676416
+Image Processing Flags          : [1], [13]
+Quality Hint                    : q900n
+Apple 0x001f                    : 0
+Image Capture Request ID        : 99F142CA-FC65-48B1-8B5B-33D477B5AFB3
+HDR Headroom                    : 1.376413941
+Apple 0x0023                    : 2033059 268435568
+Scene Flags                     : [1], [2], [7], [12], [14]
+Signal To Noise Ratio Type      : 3
+Signal To Noise Ratio           : 45.8295212
+Photo Identifier                : 022256D5-D89C-4E95-86AC-70D606040057
+Apple 0x002d                    : 6064
+Apple 0x002e                    : 1
+Focus Position                  : 46
+Apple 0x0033                    : 12288
+Apple 0x0034                    : 4
+Apple 0x0035                    : 3
+Apple 0x0036                    : 13977
+Apple 0x0037                    : 4
+Apple 0x003a                    : 4
+Apple 0x003b                    : 0
+Apple 0x003c                    : 4
+Apple 0x004a                    : 3
+Apple 0x004d                    : 36
+Apple 0x004e                    : bplist00Ò....Q1Q2..¢..Ò....S2.1S2.2#@N;m€#@ÄTÒ.[...]
+Apple 0x004f                    : bplist00......
+Apple 0x0053                    : 1
+---- GPS ----
+GPS Latitude Ref                : North
+GPS Latitude                    : 33 deg 34' 29.89"
+GPS Longitude Ref               : West
+GPS Longitude                   : 111 deg 51' 23.92"
+GPS Altitude Ref                : Above Sea Level
+GPS Altitude                    : 421.6935841 m
+GPS Time Stamp                  : 01:43:18.97
+GPS Speed Ref                   : km/h
+GPS Speed                       : 0.01338376477
+GPS Img Direction Ref           : True North
+GPS Img Direction               : 117.7846526
+GPS Dest Bearing Ref            : True North
+GPS Dest Bearing                : 117.7846526
+GPS Date Stamp                  : 2024:04:28
+GPS Horizontal Positioning Error: 7.078109514 m
+---- ICC-header ----
+Profile CMM Type                : Apple Computer Inc.
+Profile Version                 : 4.0.0
+Profile Class                   : Display Device Profile
+Color Space Data                : RGB
+Profile Connection Space        : XYZ
+Profile Date Time               : 2022:01:01 00:00:00
+Profile File Signature          : acsp
+Primary Platform                : Apple Computer Inc.
+CMM Flags                       : Not Embedded, Independent
+Device Manufacturer             : Apple Computer Inc.
+Device Model                    : 
+Device Attributes               : Reflective, Glossy, Positive, Color
+Rendering Intent                : Perceptual
+Connection Space Illuminant     : 0.9642 1 0.82491
+Profile Creator                 : Apple Computer Inc.
+Profile ID                      : ecfda38e388547c36db4bd4f7ada182f
+---- ICC_Profile ----
+Profile Description             : Display P3
+Profile Copyright               : Copyright Apple Inc., 2022
+Media White Point               : 0.96419 1 0.82489
+Red Matrix Column               : 0.51512 0.2412 -0.00105
+Green Matrix Column             : 0.29198 0.69225 0.04189
+Blue Matrix Column              : 0.1571 0.06657 0.78407
+Red Tone Reproduction Curve     : (Binary data 32 bytes, use -b option to extract)
+Chromatic Adaptation            : 1.04788 0.02292 -0.0502 0.02959 0.99048 -0.01706 -0.00923 0.01508 0.75168
+Blue Tone Reproduction Curve    : (Binary data 32 bytes, use -b option to extract)
+Green Tone Reproduction Curve   : (Binary data 32 bytes, use -b option to extract)
+---- Composite ----
+Run Time Since Power Up         : 4 days 5:01:22
+Aperture                        : 2.0
+Image Size                      : 4032x3024
+Megapixels                      : 12.2
+Scale Factor To 35 mm Equivalent: 8.7
+Shutter Speed                   : 1/304
+Create Date                     : 2024:04:27 18:43:20.585-07:00
+Date/Time Original              : 2024:04:27 18:43:20.585-07:00
+Modify Date                     : 2024:04:27 18:43:20-07:00
+GPS Altitude                    : 421.6 m Above Sea Level
+GPS Date/Time                   : 2024:04:28 01:43:18.97Z
+GPS Latitude                    : 33 deg 34' 29.89" N
+GPS Longitude                   : 111 deg 51' 23.92" W
+Circle Of Confusion             : 0.003 mm
+Field Of View                   : 38.2 deg
+Focal Length                    : 6.0 mm (35 mm equivalent: 52.0 mm)
+GPS Position                    : 33 deg 34' 29.89" N, 111 deg 51' 23.92" W
+Hyperfocal Distance             : 5.19 m
+Light Value                     : 12.6
+Lens ID                         : iPhone 11 Pro back triple camera 6mm f/2

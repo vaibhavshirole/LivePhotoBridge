@@ -1,0 +1,261 @@
+---- ExifTool ----
+ExifTool Version Number         : 12.76
+Now                             : 2024:05:29 17:39:01-07:00
+New GUID                        : 20240529-1739-0100-4D1B-98622189F827
+File Sequence                   : 0
+Processing Time                 : 0.0944 s
+---- System ----
+File Name                       : PXL_20240228_214454169.MP.jpg
+Base Name                       : PXL_20240228_214454169.MP
+Directory                       : /Users/vaibhav/Desktop
+File Path                       : /Users/vaibhav/Desktop/PXL_20240228_214454169.MP.jpg
+File Size                       : 4.3 MB
+File Modification Date/Time     : 2024:02:28 14:44:58-07:00
+File Access Date/Time           : 2024:05:29 17:10:32-07:00
+File Inode Change Date/Time     : 2024:05:29 17:10:30-07:00
+File Permissions                : -rw-------
+File Attributes                 : Regular; (none)
+File Device Number              : 16777230
+File Inode Number               : 109534809
+File Hard Links                 : 1
+File User ID                    : vaibhav
+File Group ID                   : staff
+File Device ID                  : 0.0
+File Block Size                 : 4096
+File Block Count                : 8320
+---- MacOS ----
+File Creation Date/Time         : 2024:02:28 14:44:58-07:00
+KMD Item Display Name With Extensions: PXL_20240228_214454169.MP.jpg
+MD Item Acquisition Make        : Google
+MD Item Acquisition Model       : Pixel 3a
+MD Item Altitude                : 207.79
+MD Item Aperture                : 1.7
+MD Item Bits Per Sample         : 24
+MD Item Color Space             : RGB
+MD Item Content Creation Date   : 2024:02:28 15:44:54-07:00
+MD Item Content Creation Date Ranking: 2024:05:29 17:00:00-07:00
+MD Item Content Modification Date: 2024:02:28 15:44:54-07:00
+MD Item Content Type            : public.jpeg
+MD Item Content Type Tree       : public.jpeg, public.image, public.data, public.item, public.content
+MD Item Creator                 : HDR+ 1.0.450594208zd
+MD Item Date Added              : 2024:05:29 17:10:30-07:00
+MD Item Display Name            : PXL_20240228_214454169.MP.jpg
+MD Item Document Identifier     : 0
+MD Item EXIF Version            : 2.3.2
+MD Item Exposure Mode           : 0
+MD Item Exposure Program        : 2
+MD Item Exposure Time Seconds   : 0.000554
+MD Item Flash On Off            : 0
+MD Item F Number                : 1.8
+MD Item Focal Length            : 4.44
+MD Item Focal Length 35mm       : 27
+MD Item FS Content Change Date  : 2024:02:28 14:44:58-07:00
+MD Item FS Creation Date        : 2024:02:28 14:44:58-07:00
+MD Item FS Creator Code         : 
+MD Item FS Finder Flags         : 0
+MD Item FS Has Custom Icon      : 
+MD Item FS Invisible            : 0
+MD Item FS Is Extension Hidden  : 0
+MD Item FS Is Stationery        : 
+MD Item FS Label                : 0 (none)
+MD Item FS Name                 : PXL_20240228_214454169.MP.jpg
+MD Item FS Node Count           : 
+MD Item FS Owner Group ID       : 20
+MD Item FS Owner User ID        : 501
+MD Item FS Size                 : 4256022
+MD Item FS Type Code            : 
+MD Item GPS Date Stamp          : 2024:02:28
+MD Item Has Alpha Channel       : 0
+MD Item Image Direction         : 172
+MD Item Interesting Date Ranking: 2024:05:03 17:00:00-07:00
+MD Item ISO Speed               : 60
+MD Item Kind                    : JPEG image
+MD Item Last Used Date          : 2024:05:03 20:21:24-07:00
+MD Item Last Used Date Ranking  : 2024-05-04 00:00:00 +0000
+MD Item Latitude                : 44.76993833333334
+MD Item Logical Size            : 4256022
+MD Item Longitude               : -93.41108
+MD Item Metering Mode           : 2
+MD Item Orientation             : 1
+MD Item Physical Size           : 4259840
+MD Item Pixel Count             : 12192768
+MD Item Pixel Height            : 4032
+MD Item Pixel Width             : 3024
+MD Item Profile Name            : sRGB IEC61966-2.1
+MD Item Red Eye On Off          : 0
+MD Item Resolution Height DPI   : 72
+MD Item Resolution Width DPI    : 72
+MD Item Timestamp               : 21:44:44
+MD Item Use Count               : 1
+MD Item Used Dates              : 2024:05:03 00:00:00-07:00
+MD Item White Balance           : 0
+X Attr Last Used Date           : 2024:05:04 03:21:24
+X Attr Quarantine               : Flags=0082 set at 2024:05:01 07:50:45 by Preview
+---- File ----
+File Type                       : JPEG
+File Type Extension             : jpg
+MIME Type                       : image/jpeg
+Exif Byte Order                 : Little-endian (Intel, II)
+Image Width                     : 3024
+Image Height                    : 4032
+Encoding Process                : Baseline DCT, Huffman coding
+Bits Per Sample                 : 8
+Color Components                : 3
+Y Cb Cr Sub Sampling            : YCbCr4:2:0 (2 2)
+JPEG Image Length               : 2468715
+JPEG Quality Estimate           : 95
+JPEG Digest                     : Unknown (3d7cf9b61fa7f316d08e83465caabbcc:221111)
+---- IFD0 ----
+Image Width                     : 3024
+Image Height                    : 4032
+Make                            : Google
+Camera Model Name               : Pixel 3a
+Orientation                     : Horizontal (normal)
+X Resolution                    : 72
+Y Resolution                    : 72
+Resolution Unit                 : inches
+Software                        : HDR+ 1.0.450594208zd
+Modify Date                     : 2024:02:28 15:44:54
+Y Cb Cr Positioning             : Centered
+---- ExifIFD ----
+Exposure Time                   : 1/1805
+F Number                        : 1.8
+Exposure Program                : Program AE
+ISO                             : 60
+Exif Version                    : 0232
+Date/Time Original              : 2024:02:28 15:44:54
+Create Date                     : 2024:02:28 15:44:54
+Offset Time                     : -06:00
+Offset Time Original            : -06:00
+Offset Time Digitized           : -06:00
+Components Configuration        : Y, Cb, Cr, -
+Shutter Speed Value             : 1/1808
+Aperture Value                  : 1.8
+Brightness Value                : 8.25
+Exposure Compensation           : 0
+Max Aperture Value              : 1.8
+Subject Distance                : 1.619 m
+Metering Mode                   : Center-weighted average
+Flash                           : Off, Did not fire
+Focal Length                    : 4.4 mm
+Sub Sec Time                    : 169
+Sub Sec Time Original           : 169
+Sub Sec Time Digitized          : 169
+Flashpix Version                : 0100
+Color Space                     : sRGB
+Exif Image Width                : 3024
+Exif Image Height               : 4032
+Sensing Method                  : One-chip color area
+Scene Type                      : Directly photographed
+Custom Rendered                 : Custom
+Exposure Mode                   : Auto
+White Balance                   : Auto
+Digital Zoom Ratio              : 2
+Focal Length In 35mm Format     : 27 mm
+Scene Capture Type              : Standard
+Contrast                        : Normal
+Saturation                      : Normal
+Sharpness                       : Normal
+Subject Distance Range          : Close
+Lens Make                       : Google
+Lens Model                      : Pixel 3a back camera 4.44mm f/1.8
+Composite Image                 : Composite Image Captured While Shooting
+---- InteropIFD ----
+Interoperability Index          : R98 - DCF basic file (sRGB)
+Interoperability Version        : 0100
+---- GPS ----
+GPS Latitude Ref                : North
+GPS Latitude                    : 44 deg 46' 11.78"
+GPS Longitude Ref               : West
+GPS Longitude                   : 93 deg 24' 39.89"
+GPS Altitude Ref                : Above Sea Level
+GPS Altitude                    : 207.79 m
+GPS Time Stamp                  : 21:44:44
+GPS Img Direction Ref           : Magnetic North
+GPS Img Direction               : 172
+GPS Date Stamp                  : 2024:02:28
+---- IFD1 ----
+Image Width                     : 378
+Image Height                    : 504
+Compression                     : JPEG (old-style)
+Orientation                     : Horizontal (normal)
+X Resolution                    : 72
+Y Resolution                    : 72
+Resolution Unit                 : inches
+Thumbnail Offset                : 1344
+Thumbnail Length                : 29947
+Thumbnail Image                 : (Binary data 29947 bytes, use -b option to extract)
+---- XMP-x ----
+XMP Toolkit                     : Adobe XMP Core 5.1.0-jc003
+---- XMP-GCamera ----
+Motion Photo                    : 1
+Motion Photo Version            : 1
+Motion Photo Presentation Timestamp Us: 99918
+HDRP Maker Note                 : (Binary data 19195 bytes, use -b option to extract)
+Shot Log Data                   : (Binary data 216 bytes, use -b option to extract)
+---- XMP-xmpNote ----
+Has Extended XMP                : 4B971AC1537F2E4BD67F98FD9516CD20
+---- XMP-Container ----
+Directory Item Mime             : image/jpeg
+Directory Item Semantic         : Primary
+Directory Item Length           : 0
+Directory Item Padding          : 0
+Directory Item Mime             : video/mp4
+Directory Item Semantic         : MotionPhoto
+Directory Item Length           : 1601147
+Directory Item Padding          : 0
+---- JFIF ----
+JFIF Version                    : 1.02
+Resolution Unit                 : None
+X Resolution                    : 1
+Y Resolution                    : 1
+---- ICC-header ----
+Profile CMM Type                : 
+Profile Version                 : 4.0.0
+Profile Class                   : Display Device Profile
+Color Space Data                : RGB
+Profile Connection Space        : XYZ
+Profile Date Time               : 2016:12:08 09:38:28
+Profile File Signature          : acsp
+Primary Platform                : Unknown ()
+CMM Flags                       : Not Embedded, Independent
+Device Manufacturer             : Google
+Device Model                    : 
+Device Attributes               : Reflective, Glossy, Positive, Color
+Rendering Intent                : Perceptual
+Connection Space Illuminant     : 0.9642 1 0.82491
+Profile Creator                 : Google
+Profile ID                      : 75e1a6b13c34376310c8ab660632a28a
+---- ICC_Profile ----
+Profile Description             : sRGB IEC61966-2.1
+Profile Copyright               : Copyright (c) 2016 Google Inc.
+Media White Point               : 0.95045 1 1.08905
+Media Black Point               : 0 0 0
+Red Matrix Column               : 0.43604 0.22249 0.01392
+Green Matrix Column             : 0.38512 0.7169 0.09706
+Blue Matrix Column              : 0.14305 0.06061 0.71391
+Red Tone Reproduction Curve     : (Binary data 32 bytes, use -b option to extract)
+Chromatic Adaptation            : 1.04788 0.02292 -0.05019 0.02959 0.99048 -0.01704 -0.00922 0.01508 0.75168
+Blue Tone Reproduction Curve    : (Binary data 32 bytes, use -b option to extract)
+Green Tone Reproduction Curve   : (Binary data 32 bytes, use -b option to extract)
+---- Composite ----
+Aperture                        : 1.8
+Image Size                      : 3024x4032
+Megapixels                      : 12.2
+Scale Factor To 35 mm Equivalent: 6.1
+Shutter Speed                   : 1/1805
+Create Date                     : 2024:02:28 15:44:54.169-06:00
+Date/Time Original              : 2024:02:28 15:44:54.169-06:00
+Modify Date                     : 2024:02:28 15:44:54.169-06:00
+GPS Altitude                    : 207.7 m Above Sea Level
+GPS Date/Time                   : 2024:02:28 21:44:44Z
+GPS Latitude                    : 44 deg 46' 11.78" N
+GPS Longitude                   : 93 deg 24' 39.89" W
+Circle Of Confusion             : 0.005 mm
+Depth Of Field                  : 5.02 m (0.94 - 5.96 m)
+Field Of View                   : 67.4 deg
+Focal Length                    : 4.4 mm (35 mm equivalent: 27.0 mm)
+GPS Position                    : 44 deg 46' 11.78" N, 93 deg 24' 39.89" W
+Hyperfocal Distance             : 2.22 m
+Light Value                     : 13.3
+Lens ID                         : Pixel 3a back camera 4.44mm f/1.8

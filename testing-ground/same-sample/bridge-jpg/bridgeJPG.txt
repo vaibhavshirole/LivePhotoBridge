@@ -1,0 +1,38 @@
+<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?>
+<x:xmpmeta xmlns:x='adobe:ns:meta/' x:xmptk='Image::ExifTool 12.76'>
+<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>
+
+ <rdf:Description rdf:about=''
+  xmlns:GCamera='http://ns.google.com/photos/1.0/camera/'>
+  <GCamera:MicroVideo>1</GCamera:MicroVideo>
+  <GCamera:MicroVideoOffset>4254557</GCamera:MicroVideoOffset>
+  <GCamera:MicroVideoPresentationTimestampUs>575676</GCamera:MicroVideoPresentationTimestampUs>
+  <GCamera:MicroVideoVersion>1</GCamera:MicroVideoVersion>
+ </rdf:Description>
+</rdf:RDF>
+</x:xmpmeta>
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+<?xpacket end='w'?>
