@@ -1,0 +1,414 @@
+[{
+  "SourceFile": "me/IMG_4991.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/IMG_4991.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "11ACDAF2-7917-4701-BF40-C145F0160B96"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 843579392
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/camphoto_959030623.jpg",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/camphoto_959030623.jpg"
+  },
+  "contentidentifier": {
+    "id": "",
+    "table": "",
+    "val": "-"
+  },
+  "livephotovideoindex": {
+    "id": "",
+    "table": "",
+    "val": "-"
+  },
+  "runtimescale": {
+    "id": "",
+    "table": "",
+    "val": "-"
+  }
+},
+{
+  "SourceFile": "me/IMG_4996.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/IMG_4996.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "ED501080-DF41-4216-BDAB-34F7E0E8927A"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 574627840
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/1/IMG_5011.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/1/IMG_5011.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "37DE9B62-91F3-49BC-BE9D-EFCD9A80614C"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/1/IMG_5010.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/1/IMG_5010.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "BF51A71F-39C9-413A-BFFB-71440427AFB8"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/1/IMG_5013.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/1/IMG_5013.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "FDF2ABCA-4CC1-4715-8660-B520F442F78A"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/1/IMG_5014.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/1/IMG_5014.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "CB6DECE6-7EFE-4EA2-952E-0F016EAFB492"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/1/IMG_5015.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/1/IMG_5015.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "58738D38-EDC4-4F15-8D97-F0DB8D0B0B6C"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 574627840
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/IMG_4998.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/IMG_4998.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "18C1E4F8-763A-4D5F-A7F6-8AA26A3EEE04"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 65536
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/IMG_5004.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/IMG_5004.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "F5E547BF-2469-49CF-A85A-7A2619511D00"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/IMG_5003.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/IMG_5003.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "2074C3ED-95EF-4338-89F9-9F321022C592"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/IMG_5002.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/IMG_5002.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "20628570-9569-4531-AFEB-2693ED546693"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/IMG_5001.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/IMG_5001.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "2EBD7C70-CB6F-4E4D-A99D-1C36D4A5E3BC"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 65536
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/2/IMG_5009.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/2/IMG_5009.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "80C404E6-0E99-4838-9F08-DD1406E138B7"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/2/IMG_5008.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/2/IMG_5008.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "892D4B49-641F-4A25-9F6A-9D56616EFD45"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/2/IMG_5005.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/2/IMG_5005.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "A35C4600-D33A-4EAD-B1C2-E5EBC469D827"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/2/IMG_5006.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/2/IMG_5006.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "4FC0912B-91E1-4D3C-8415-B69E26C74932"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+},
+{
+  "SourceFile": "me/2/IMG_5007.JPG",
+  "FilePath": {
+    "id": "FilePath",
+    "table": "Extra",
+    "val": "/Users/vaibhav/Desktop/me/2/IMG_5007.JPG"
+  },
+  "ContentIdentifier": {
+    "id": 17,
+    "table": "Apple::Main",
+    "val": "EECD40C4-4BE9-4F15-A45A-83F5311AF4DD"
+  },
+  "LivePhotoVideoIndex": {
+    "id": 23,
+    "table": "Apple::Main",
+    "val": 575676416
+  },
+  "RunTimeScale": {
+    "id": "timescale",
+    "table": "Apple::RunTime",
+    "val": 1000000000
+  }
+}]
