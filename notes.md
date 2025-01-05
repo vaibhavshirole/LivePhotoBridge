@@ -1,6 +1,10 @@
 # thinking
 * edited images will have a unique content identifier from their original photo
-* I don't want duplicate photos. so, if there are multiple of the same content identifier, I want them gone
+    * but, edited images will keep the ORIGINAL photo around, which will result in duplicates. 
+    * I don't want duplicate photos. so, if there are multiple of the same content identifier, I want them gone
+* corrupted MP will have contentId in .heic but not .mov
+    * corrupted MP cannot be duplicated, so edited photos will have its new contentId and no vid alongside it
+    * solution to corrupted MP's: match by filename and date
 
 data structures to make: 
 ```
