@@ -3,16 +3,32 @@ import sys
 import argparse
 import subprocess
 
-def convert_heic_to_jpg(input_file, output_file):
-    command = [
-        'sips',
-        '-s', 'format', 'jpeg',
-        '-s', 'formatOptions', '100',
-        input_file,
-        '--out', output_file
-    ]
-    subprocess.run(command)
-    os.remove(input_file)
+def convert_file(input_file):
+    if not os.path.isfile(input_file):
+        print("Error: Input is not a file.")
+        return None
+    
+    if input_file.lower().endswith('.heic'):
+        output_file = os.path.splitext(input_file)[0] + '.JPG'
+        command = [
+            'sips',
+            '-s', 'format', 'jpeg',
+            '-s', 'formatOptions', '100',
+            input_file,
+            '--out', output_file
+        ]
+        try:
+            subprocess.run(command, check=True)
+            os.remove(input_file)
+            print("File converted: ", output_file)
+            return output_file
+        except subprocess.CalledProcessError as e:
+            print(f"Error during conversion: {e}")
+            return None
+    else:
+        print("Error: Input file is not in HEIC format:", input_file)
+        return None
+
 
 def convert_directory(input_directory):
     if not os.path.isdir(input_directory):
@@ -33,19 +49,12 @@ def convert_directory(input_directory):
     ]
     with open(os.devnull, 'w') as devnull:
         subprocess.run(' '.join(command), shell=True, stdout=devnull)
-
-def convert_file(input_file):
-    if not os.path.isfile(input_file):
-        print("Error: Input is not a file.")
-        return
     
-    if input_file.lower().endswith('.heic'):
-        output_file = os.path.splitext(input_file)[0] + '.JPG'
-        convert_heic_to_jpg(input_file, output_file)
-        print("File converted:", output_file)
-    else:
-        print("Error: Input file is not in HEIC format:", input_file)
-    return 
+    print("Files converted in: ", input_directory)
+
+
+def check_directory_for_duplicates(input_directory, recurse):
+    pass
 
 def create_arg_parser():
     # Creates and returns the ArgumentParser object

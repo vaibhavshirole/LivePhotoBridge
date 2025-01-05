@@ -70,6 +70,10 @@ def group_files_by_contentidentifier(files):
                             # If dates match, treat them as a pair
                             groups[photo['metadata']['ContentIdentifier']].append(file)
                             break
+                
+                if not matching_photos:
+                    groups['unmatched_videos'].append(file)
+
             else:
                 # If no identifier and not a video, just group by date and filename (fallback case)
                 create_date = file['metadata'].get('CreateDate')
@@ -86,42 +90,42 @@ def process_directory(directory, recurse, output_dir, heic_conversion):
     """
     Process the directory to extract metadata, group files, pair files, and create motion photos.
     """
-    # Extract metadata in a single batch
     metadata_by_path = extract_metadata_batch(directory, recurse)
 
     files = []
     for file_path, metadata in metadata_by_path.items():
         ext = os.path.splitext(file_path)[-1].lower()
-        if ext in ['.jpg', '.jpeg', '.heic']:
+        if ext in ['.jpg', '.jpeg', '.png', '.heic']:
             files.append({'path': file_path, 'metadata': metadata, 'type': 'photo'})
         elif ext in ['.mov', '.mp4']:
             files.append({'path': file_path, 'metadata': metadata, 'type': 'video'})
 
-    # Group files by ContentIdentifier
     groups = group_files_by_contentidentifier(files)
 
-    # Process each group
     for group_key, group_files in groups.items():
+        if group_key == 'unmatched_videos':
+            continue  # Skip unmatched videos here; handle them separately
+
         photos = [f for f in group_files if f['type'] == 'photo']
         videos = [f for f in group_files if f['type'] == 'video']
 
         if photos and videos:
-            # Pick the first photo and first video as the pair
             photo = photos[0]
             video = videos[0]
-
-            # Create motion photo
             if create_motion_photo(photo['path'], video['path'], photo['metadata'], output_dir):
-                # Delete all photos and videos in the group after creating motion photo
                 for file in group_files:
                     os.remove(file['path'])
-
         else:
-            # If no matching video/photo pair, save unmatched files as-is
             for file in group_files:
                 dest_path = os.path.join(output_dir, os.path.basename(file['path']))
                 os.rename(file['path'], dest_path)
-                print(f"Saved file: {dest_path}")
+                print(f"Moved unmatched photo to: {dest_path}")
+
+    unmatched_videos = groups.get('unmatched_videos', [])
+    for video in unmatched_videos:
+        dest_path = os.path.join(output_dir, os.path.basename(video['path']))
+        os.rename(video['path'], dest_path)
+        print(f"Moved unmatched video to: {dest_path}")
 
 
 def process_individual_files(photo_path, video_path, output_dir):
@@ -213,7 +217,7 @@ def create_motion_photo(photo_path, video_path, metadata, output_dir):
     Create a motion photo from the provided photo and video paths.
     Save the result in the output directory and return True if successful.
     """
-    print(f"\nCreating motion photo...")
+    print(f"Creating motion photo...")
     
     try:
         # Extract filename and extension
@@ -272,7 +276,6 @@ def main(args):
         if args.heic:
             print("Converting .HEIC to .JPG")
             macos_heic_to_jpg.convert_directory(args.dir)
-            print("Finished conversion.")
 
         process_directory(args.dir, args.recurse, args.output or args.dir, args.heic)
 
@@ -287,11 +290,9 @@ def main(args):
             print(f"Error: The video file '{args.video}' does not exist or is not a valid file.")
             exit(1)
 
-        if args.heic:
+        if args.heic and args.photo.lower().endswith('.heic'):
             print("Converting .HEIC to .JPG")
-            macos_heic_to_jpg.convert_file(args.photo)
-            photo_path = os.path.splitext(args.photo)[0] + '.JPG'
-            print("Finished conversion.")
+            photo_path = macos_heic_to_jpg.convert_file(args.photo)
         else:
             photo_path = args.photo
 
