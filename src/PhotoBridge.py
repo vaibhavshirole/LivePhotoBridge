@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 import subprocess
 from collections import defaultdict
 
@@ -108,7 +109,7 @@ def process_directory(directory, recurse, output_dir, heic_conversion):
             video = videos[0]
 
             # Create motion photo
-            if create_motion_photo(photo['path'], video['path'], output_dir):
+            if create_motion_photo(photo['path'], video['path'], photo['metadata'], output_dir):
                 # Delete all photos and videos in the group after creating motion photo
                 for file in group_files:
                     os.remove(file['path'])
@@ -156,14 +157,88 @@ def process_individual_files(photo_path, video_path, output_dir):
         print("Failed to create motion photo.")
 
 
-def create_motion_photo(photo_path, video_path, output_dir):
+def add_xmp_metadata(photo_metadata, motion_photo_path, video_offset):
+    """Adds XMP metadata to the merged image indicating the byte offset in the file where the video begins.
+    :param merged_file: The path to the file that has the photo and video merged together.
+    :param offset: The number of bytes from EOF to the beginning of the video.
+    :return: None
+    """
+    print(f"Adding metadata for {os.path.basename(motion_photo_path)}")
+
+    LivePhotoVideoIndex = int(photo_metadata["LivePhotoVideoIndex"])
+    RunTimeScale = int(photo_metadata["RunTimeScale"])
+    MicroVideoPresentationTimestampUs = int((LivePhotoVideoIndex/RunTimeScale)*1000000)
+
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Define the relative path to the config file
+    config_file_path = os.path.join(script_dir, '../exiftool/google_camera.config')
+
+    # Define the ExifTool command to add MicroVideo properties (Haven't figured out MotionPhoto yet)
+    exiftool_add_microvideo = [
+        'exiftool', 
+        '-config', config_file_path, 
+        '-overwrite_original', 
+        '-m',
+        '-q',
+        '-XMP-GCamera:MicroVideo=1', 
+        '-XMP-GCamera:MicroVideoVersion=1', 
+        '-XMP-GCamera:MicroVideoOffset=' + str(video_offset) + '', 
+        '-XMP-GCamera:MicroVideoPresentationTimestampUs=' + str(MicroVideoPresentationTimestampUs) + '', 
+        motion_photo_path
+    ]
+    try:
+        # TODO: If I don't capture output, it will explain that .HEIC is failing. 
+        #       Currently don't know how to get this to work for .HEIC so I'm not 
+        #       returning error and just letting the .HEIC get remade in output_dir
+        #       which actually is the intended behavior. Could just do without the 
+        #       fact that it's working thanks to an error. :(
+        subprocess.run(exiftool_add_microvideo, capture_output=True, text=True)
+    except Exception as e:
+        print("Error: Couldn't add metadata.", e)
+
+    return
+
+
+def create_motion_photo(photo_path, video_path, metadata, output_dir):
     """
     Create a motion photo from the provided photo and video paths.
     Save the result in the output directory and return True if successful.
     """
-    # Placeholder: Implement motion photo creation logic.
-    print(f"Creating motion photo from {photo_path} and {video_path}")
-    return True  # Simulating success for now
+    print(f"\nCreating motion photo...")
+    
+    try:
+        # Extract filename and extension
+        base_name, extension = os.path.splitext(os.path.basename(photo_path))
+
+        # Check if the photo extension is not .heic and block .HEIC from getting .MP
+        if extension.lower() != ".heic":
+            base_name += ".MP" 
+        
+        # Construct the motion photo path
+        motion_photo_path = os.path.join(output_dir, f"{base_name}{extension}")
+        os.makedirs(os.path.dirname(motion_photo_path), exist_ok=True)
+
+        # Combine the photo and video into the motion photo
+        with open(motion_photo_path, "wb") as outfile, open(photo_path, "rb") as photo, open(video_path, "rb") as video:
+            outfile.write(photo.read())
+            outfile.write(video.read())
+        
+        # The 'offset' field in the XMP metadata should be the offset (in bytes) 
+        # from the end of the file to the part where the video portion of the merged file begins. 
+        # In other words, merged size - photo_only_size = offset.
+        photo_filesize = os.path.getsize(photo_path)
+        motion_photo_filesize = os.path.getsize(motion_photo_path)
+        offset_in_bytes = motion_photo_filesize - photo_filesize
+
+        add_xmp_metadata(metadata, motion_photo_path, offset_in_bytes)
+
+        print("Created successfully.")
+        return True
+    except Exception as e:
+        print("Error: Motion Photo could not be made.")
+        return False
 
 
 def main(args):
