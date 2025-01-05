@@ -130,31 +130,36 @@ def process_individual_files(photo_path, video_path, output_dir):
     photo_metadata = extract_metadata_batch(photo_path)  # Extract metadata for the photo
     video_metadata = extract_metadata_batch(video_path)  # Extract metadata for the video
 
-    # Check if metadata extraction was successful
-    if not photo_metadata or not video_metadata:
-        print("Error: Could not extract metadata from one or both files.")
-        return
+    files = []
+    for file_path, metadata in photo_metadata.items():
+        files.append({'path': file_path, 'metadata': metadata, 'type': 'photo'})
+    for file_path, metadata in video_metadata.items():
+        files.append({'path': file_path, 'metadata': metadata, 'type': 'video'})
 
-    # Match by ContentIdentifier or fallback criteria (CreateDate + Filename)
-    photo_content_identifier = photo_metadata.get('ContentIdentifier')
-    video_content_identifier = video_metadata.get('ContentIdentifier')
+    groups = group_files_by_contentidentifier(files)
 
-    # Inform the user about the matching status
-    if photo_content_identifier == video_content_identifier:
-        print("Photo and video match by ContentIdentifier.")
-    elif (photo_metadata.get('CreateDate').split()[0] == video_metadata.get('CreateDate').split()[0] and
-          os.path.splitext(os.path.basename(photo_path))[0] == os.path.splitext(os.path.basename(video_path))[0]):
-        print("Photo and video match by CreateDate and filename.")
-    else:
-        print("Photo and video do not match.")
+    # Process each group
+    for group_key, group_files in groups.items():
+        photos = [f for f in group_files if f['type'] == 'photo']
+        videos = [f for f in group_files if f['type'] == 'video']
 
-    # Proceed to create motion photo regardless of matching status
-    if create_motion_photo(photo_path, video_path, output_dir):
-        print("Motion photo created successfully.")
-        os.remove(photo_path)  # Delete photo after creating motion photo
-        os.remove(video_path)  # Delete video after creating motion photo
-    else:
-        print("Failed to create motion photo.")
+        if photos and videos:
+            # Pick the first photo and first video as the pair
+            photo = photos[0]
+            video = videos[0]
+
+            # Create motion photo
+            if create_motion_photo(photo['path'], video['path'], photo['metadata'], output_dir):
+                # Delete all photos and videos in the group after creating motion photo
+                for file in group_files:
+                    os.remove(file['path'])
+
+        else:
+            # If no matching video/photo pair, save unmatched files as-is
+            for file in group_files:
+                dest_path = os.path.join(output_dir, os.path.basename(file['path']))
+                os.rename(file['path'], dest_path)
+                print(f"Saved file: {dest_path}")
 
 
 def add_xmp_metadata(photo_metadata, motion_photo_path, video_offset):
@@ -237,7 +242,7 @@ def create_motion_photo(photo_path, video_path, metadata, output_dir):
         print("Created successfully.")
         return True
     except Exception as e:
-        print("Error: Motion Photo could not be made.")
+        print("Error: Motion Photo could not be made.", e)
         return False
 
 
