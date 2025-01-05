@@ -30,6 +30,7 @@ def extract_metadata_batch(directory, recurse=False):
     metadata_by_path = {item["FilePath"]: item for item in exif_data}
     return metadata_by_path
 
+
 def group_files_by_contentidentifier(files):
     """
     Group photos and videos by ContentIdentifier, or fallback to matching by filename and date if necessary.
@@ -164,14 +165,46 @@ def create_motion_photo(photo_path, video_path, output_dir):
     print(f"Creating motion photo from {photo_path} and {video_path}")
     return True  # Simulating success for now
 
+
 def main(args):
+    # Check if --output directory exists, if not, create it
+    if args.output:
+        if not os.path.isdir(args.output):
+            print(f"Output directory '{args.output}' does not exist. Creating it now...")
+            os.makedirs(args.output)  # Create the directory if it doesn't exist
+            print(f"Directory '{args.output}' created successfully.")
+
     if args.dir:
+        # Check if the directory exists
+        if not os.path.isdir(args.dir):
+            print(f"Error: The directory '{args.dir}' does not exist or is not a valid directory.")
+            exit(1)
+
+        # Check if the directory is empty of files (ignoring subdirectories)
+        files_in_dir = [f for f in os.listdir(args.dir) if os.path.isfile(os.path.join(args.dir, f))]
+        if not files_in_dir:  # If the list of files is empty
+            print(f"Error: The directory '{args.dir}' does not contain any files.")
+            exit(1)
+
         process_directory(args.dir, args.recurse, args.output or args.dir, args.heic)
+
     elif args.photo and args.video:
+        # Check if the photo file exists
+        if not os.path.isfile(args.photo):
+            print(f"Error: The photo file '{args.photo}' does not exist or is not a valid file.")
+            exit(1)
+        
+        # Check if the video file exists
+        if not os.path.isfile(args.video):
+            print(f"Error: The video file '{args.video}' does not exist or is not a valid file.")
+            exit(1)
+
         process_individual_files(args.photo, args.video, args.output or os.path.dirname(args.photo))
+
     else:
         print("Error: You must provide either --dir or both --photo and --video.")
         exit(1)
+
 
 if __name__ == '__main__':
     import argparse
@@ -179,10 +212,10 @@ if __name__ == '__main__':
         description='Merges a photo and video into a MotionPhoto-formatted Google Motion Photo'
     )
     parser.add_argument('--dir', type=str, help='Process a directory for photos/videos. Takes precedence over --photo/--video.')
-    parser.add_argument('--recurse', help='Recursively process a directory. Only applies if --dir is also provided.', action='store_true')
     parser.add_argument('--photo', type=str, help='Path to the JPEG photo to add.')
     parser.add_argument('--video', type=str, help='Path to the MOV video to add.')
-    parser.add_argument('--output', type=str, help='Path to where files should be written out to.')
+    parser.add_argument('--output', type=str, help='Path to where files should be written out to. Defaults to --dir')
+    parser.add_argument('--recurse', help='Recursively process a directory. Only applies if --dir is also provided.', action='store_true')
     parser.add_argument('--heic', help='Convert all .HEIC to .JPG (macOS only).', action='store_true')
 
     main(parser.parse_args())
