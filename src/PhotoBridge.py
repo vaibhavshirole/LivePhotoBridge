@@ -4,6 +4,8 @@ import shutil
 import subprocess
 from collections import defaultdict
 
+import macos_heic_to_jpg
+
 def extract_metadata_batch(directory, recurse=False):
     """
     Extract metadata for all files in a directory using ExifTool in a single batch.
@@ -254,6 +256,7 @@ def main(args):
             os.makedirs(args.output)  # Create the directory if it doesn't exist
             print(f"Directory '{args.output}' created successfully.")
 
+
     if args.dir:
         # Check if the directory exists
         if not os.path.isdir(args.dir):
@@ -265,6 +268,11 @@ def main(args):
         if not files_in_dir:  # If the list of files is empty
             print(f"Error: The directory '{args.dir}' does not contain any files.")
             exit(1)
+
+        if args.heic:
+            print("Converting .HEIC to .JPG")
+            macos_heic_to_jpg.convert_directory(args.dir)
+            print("Finished conversion.")
 
         process_directory(args.dir, args.recurse, args.output or args.dir, args.heic)
 
@@ -279,7 +287,15 @@ def main(args):
             print(f"Error: The video file '{args.video}' does not exist or is not a valid file.")
             exit(1)
 
-        process_individual_files(args.photo, args.video, args.output or os.path.dirname(args.photo))
+        if args.heic:
+            print("Converting .HEIC to .JPG")
+            macos_heic_to_jpg.convert_file(args.photo)
+            photo_path = os.path.splitext(args.photo)[0] + '.JPG'
+            print("Finished conversion.")
+        else:
+            photo_path = args.photo
+
+        process_individual_files(photo_path, args.video, args.output or os.path.dirname(args.photo))
 
     else:
         print("Error: You must provide either --dir or both --photo and --video.")
