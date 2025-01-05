@@ -1,6 +1,7 @@
 import os
 import json
 import subprocess
+from collections import defaultdict
 
 def extract_metadata_batch(directory, recurse=False):
     """
@@ -27,79 +28,96 @@ def extract_metadata_batch(directory, recurse=False):
 
     # Organize metadata by file path
     metadata_by_path = {item["FilePath"]: item for item in exif_data}
-
     return metadata_by_path
 
-def pair_files(photos, videos):
+def group_files_by_contentidentifier(files):
     """
-    Pair photos and videos based on matching ContentIdentifier or fallback criteria.
-    Returns a list of tuples (photo, video) for matched pairs.
+    Group photos and videos by ContentIdentifier, or fallback to matching by filename and date if necessary.
+    Returns a dictionary where keys are ContentIdentifiers or date-based keys and values are lists of file paths (photos/videos).
     """
-    paired_files = []
-    unmatched_photos = list(photos)  # Copy to keep track of unmatched photos
+    groups = defaultdict(list)
+    
+    # Store photos separately for matching in fallback case
+    photos = [file for file in files if file['type'] == 'photo']
+    
+    for file in files:
+        content_identifier = file['metadata'].get('ContentIdentifier')
+        
+        if content_identifier:
+            # If the file has a content identifier, group by it
+            groups[content_identifier].append(file)
+        else:
+            # Fallback: Video without content identifier, try matching by filename + date
+            if file['type'] == 'video':
+                # Try to find a matching photo by filename
+                video_filename = os.path.splitext(os.path.basename(file['path']))[0]
+                matching_photos = [photo for photo in photos if os.path.splitext(os.path.basename(photo['path']))[0] == video_filename]
+                
+                for photo in matching_photos:
+                    # Check if the CreateDates match (compare only the date part)
+                    video_create_date = file['metadata'].get('CreateDate')
+                    photo_create_date = photo['metadata'].get('CreateDate')
+                    
+                    if video_create_date and photo_create_date:
+                        video_date = video_create_date.split()[0]  # Extract the date part
+                        photo_date = photo_create_date.split()[0]  # Extract the date part
+                        
+                        if video_date == photo_date:
+                            # If dates match, treat them as a pair
+                            groups[photo['metadata']['ContentIdentifier']].append(file)
+                            break
+            else:
+                # If no identifier and not a video, just group by date and filename (fallback case)
+                create_date = file['metadata'].get('CreateDate')
+                if create_date:
+                    date_part = create_date.split()[0]  # Get the date part (YYYY:MM:DD)
+                    groups[date_part, os.path.splitext(os.path.basename(file['path']))[0]].append(file)
+                else:
+                    groups['no_identifier'].append(file)
+    
+    return groups
 
-    for video in videos:
-        video_metadata = video['metadata']
-        match = None
-
-        # First, try to match by ContentIdentifier
-        if video_metadata.get('ContentIdentifier'):
-            match = next(
-                (p for p in unmatched_photos if p['metadata'].get('ContentIdentifier') == video_metadata['ContentIdentifier']),
-                None
-            )
-        # If no match by ContentIdentifier, try filename and CreateDate
-        if not match and video_metadata.get('CreateDate'):
-            match = next(
-                (
-                    p for p in unmatched_photos
-                    if os.path.splitext(os.path.basename(p['path']))[0] == os.path.splitext(os.path.basename(video['path']))[0]
-                    and p['metadata'].get('CreateDate') == video_metadata['CreateDate']
-                ),
-                None
-            )
-
-        # If a match is found, pair them and remove the photo from unmatched_photos
-        if match:
-            paired_files.append((match['path'], video['path']))
-            unmatched_photos.remove(match)
-
-    return paired_files, unmatched_photos
 
 def process_directory(directory, recurse, output_dir, heic_conversion):
     """
-    Process the directory to extract metadata, pair files, and create motion photos.
+    Process the directory to extract metadata, group files, pair files, and create motion photos.
     """
     # Extract metadata in a single batch
     metadata_by_path = extract_metadata_batch(directory, recurse)
 
-    photos = []
-    videos = []
-
-    # Categorize files as photos or videos
+    files = []
     for file_path, metadata in metadata_by_path.items():
         ext = os.path.splitext(file_path)[-1].lower()
         if ext in ['.jpg', '.jpeg', '.heic']:
-            photos.append({'path': file_path, 'metadata': metadata})
+            files.append({'path': file_path, 'metadata': metadata, 'type': 'photo'})
         elif ext in ['.mov', '.mp4']:
-            videos.append({'path': file_path, 'metadata': metadata})
+            files.append({'path': file_path, 'metadata': metadata, 'type': 'video'})
 
-    # Pair files and process
-    paired_files, unmatched_photos = pair_files(photos, videos)
+    # Group files by ContentIdentifier
+    groups = group_files_by_contentidentifier(files)
 
-    for photo, video in paired_files:
-        if create_motion_photo(photo, video, output_dir):
-            #os.remove(photo)
-            #os.remove(video)
-            print("mpphoto: ", photo)
-            print("mpvideo: ", video)
+    # Process each group
+    for group_key, group_files in groups.items():
+        photos = [f for f in group_files if f['type'] == 'photo']
+        videos = [f for f in group_files if f['type'] == 'video']
 
-    # Save unmatched photos as-is
-    for photo in unmatched_photos:
-        dest_path = os.path.join(output_dir, os.path.basename(photo['path']))
-        # os.rename(photo['path'], dest_path)
-        print("unmatched: ", dest_path)
-        print(f"Saved unmatched photo: {dest_path}")
+        if photos and videos:
+            # Pick the first photo and first video as the pair
+            photo = photos[0]
+            video = videos[0]
+
+            # Create motion photo
+            if create_motion_photo(photo['path'], video['path'], output_dir):
+                # Delete all photos and videos in the group after creating motion photo
+                for file in group_files:
+                    os.remove(file['path'])
+
+        else:
+            # If no matching video/photo pair, save unmatched files as-is
+            for file in group_files:
+                dest_path = os.path.join(output_dir, os.path.basename(file['path']))
+                os.rename(file['path'], dest_path)
+                print(f"Saved file: {dest_path}")
 
 def process_individual_files(photo_path, video_path, output_dir):
     """
@@ -137,9 +155,7 @@ def create_motion_photo(photo_path, video_path, output_dir):
     Save the result in the output directory and return True if successful.
     """
     # Placeholder: Implement motion photo creation logic.
-
-    # If photo is .heic, then still return a successful conversion but just copy the HEIC over
-
+    print(f"Creating motion photo from {photo_path} and {video_path}")
     return True  # Simulating success for now
 
 def main(args):
