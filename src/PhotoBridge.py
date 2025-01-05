@@ -119,35 +119,41 @@ def process_directory(directory, recurse, output_dir, heic_conversion):
                 os.rename(file['path'], dest_path)
                 print(f"Saved file: {dest_path}")
 
+
 def process_individual_files(photo_path, video_path, output_dir):
     """
     Process individual photo and video files.
     """
-    # Metadata extraction for individual files
-    metadata = extract_metadata_batch(os.path.dirname(photo_path))
-    photo_metadata = metadata.get(photo_path)
-    video_metadata = metadata.get(video_path)
+    # Extract metadata for both files
+    photo_metadata = extract_metadata_batch(photo_path)  # Extract metadata for the photo
+    video_metadata = extract_metadata_batch(video_path)  # Extract metadata for the video
 
+    # Check if metadata extraction was successful
     if not photo_metadata or not video_metadata:
         print("Error: Could not extract metadata from one or both files.")
         return
 
-    # Match by ContentIdentifier or fallback criteria
-    if (
-        photo_metadata.get('ContentIdentifier') == video_metadata.get('ContentIdentifier')
-        or (photo_metadata.get('CreateDate') == video_metadata.get('CreateDate')
-            and os.path.splitext(os.path.basename(photo_path))[0] == os.path.splitext(os.path.basename(video_path))[0])
-    ):
-        if create_motion_photo(photo_path, video_path, output_dir):
-            os.remove(photo_path)
-            os.remove(video_path)
-        else:
-            print("Failed to create motion photo.")
+    # Match by ContentIdentifier or fallback criteria (CreateDate + Filename)
+    photo_content_identifier = photo_metadata.get('ContentIdentifier')
+    video_content_identifier = video_metadata.get('ContentIdentifier')
+
+    # Inform the user about the matching status
+    if photo_content_identifier == video_content_identifier:
+        print("Photo and video match by ContentIdentifier.")
+    elif (photo_metadata.get('CreateDate').split()[0] == video_metadata.get('CreateDate').split()[0] and
+          os.path.splitext(os.path.basename(photo_path))[0] == os.path.splitext(os.path.basename(video_path))[0]):
+        print("Photo and video match by CreateDate and filename.")
     else:
-        print("Photo and video do not match. Saving photo as-is.")
-        dest_path = os.path.join(output_dir, os.path.basename(photo_path))
-        os.rename(photo_path, dest_path)
-        print(f"Saved photo: {dest_path}")
+        print("Photo and video do not match.")
+
+    # Proceed to create motion photo regardless of matching status
+    if create_motion_photo(photo_path, video_path, output_dir):
+        print("Motion photo created successfully.")
+        os.remove(photo_path)  # Delete photo after creating motion photo
+        os.remove(video_path)  # Delete video after creating motion photo
+    else:
+        print("Failed to create motion photo.")
+
 
 def create_motion_photo(photo_path, video_path, output_dir):
     """
