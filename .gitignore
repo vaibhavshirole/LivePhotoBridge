@@ -22,6 +22,8 @@ Cargo.lock
 *.mp4
 *.csv
 *.zip
+*.aae
+*_exif.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

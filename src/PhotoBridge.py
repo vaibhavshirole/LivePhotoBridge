@@ -1,7 +1,6 @@
 import os
 import json
 import re
-import shutil
 import subprocess
 from collections import defaultdict
 
