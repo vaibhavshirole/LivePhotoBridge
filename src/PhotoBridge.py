@@ -2,9 +2,31 @@ import os
 import json
 import re
 import subprocess
+import sys
 from collections import defaultdict
 
 import macos_heic_to_jpg
+
+def emit_progress(message, percentage):
+    """Emit a progress message that can be caught by the Electron app"""
+    progress_data = {
+        "type": "progress",
+        "message": message,
+        "percentage": percentage
+    }
+    print(json.dumps(progress_data))
+    sys.stdout.flush()
+
+
+def emit_log(message):
+    """Emit a log message that can be caught by the Electron app"""
+    log_data = {
+        "type": "log",
+        "message": message
+    }
+    print(json.dumps(log_data))
+    sys.stdout.flush()
+
 
 def extract_metadata_batch(directory, recurse=False):
     """
@@ -95,8 +117,10 @@ def process_directory(directory, recurse, output_dir, heic_conversion):
     """
     Process the directory to extract metadata, group files, pair files, and create motion photos.
     """
+    emit_progress("Extracting metadata...", 10)
     metadata_by_path = extract_metadata_batch(directory, recurse)
 
+    emit_progress("Processing files...", 20)
     files = []
     for file_path, metadata in metadata_by_path.items():
         ext = os.path.splitext(file_path)[-1].lower()
@@ -105,11 +129,19 @@ def process_directory(directory, recurse, output_dir, heic_conversion):
         elif ext in ['.mov', '.mp4']:
             files.append({'path': file_path, 'metadata': metadata, 'type': 'video'})
 
+    emit_progress("Grouping files...", 40)
     groups = group_files_by_contentidentifier(files)
+
+    total_groups = len(groups)
+    processed_groups = 0
 
     for group_key, group_files in groups.items():
         if group_key == 'unmatched_videos':
-            continue  # Skip unmatched videos here; handle them separately
+            continue
+
+        processed_groups += 1
+        progress = 40 + (processed_groups / total_groups * 50)
+        emit_progress(f"Processing group {processed_groups} of {total_groups}...", progress)
 
         photos = [f for f in group_files if f['type'] == 'photo']
         videos = [f for f in group_files if f['type'] == 'video']
@@ -124,13 +156,16 @@ def process_directory(directory, recurse, output_dir, heic_conversion):
             for file in group_files:
                 dest_path = os.path.join(output_dir, os.path.basename(file['path']))
                 os.rename(file['path'], dest_path)
-                print(f"Moved unmatched photo to: {dest_path}")
+                emit_log(f"Moved unmatched photo to: {dest_path}")
 
+    emit_progress("Processing unmatched files...", 95)
     unmatched_videos = groups.get('unmatched_videos', [])
     for video in unmatched_videos:
         dest_path = os.path.join(output_dir, os.path.basename(video['path']))
         os.rename(video['path'], dest_path)
-        print(f"Moved unmatched video to: {dest_path}")
+        emit_log(f"Moved unmatched video to: {dest_path}")
+
+    emit_progress("Complete!", 100)
 
 
 def process_individual_files(photo_path, video_path, output_dir):
@@ -222,7 +257,7 @@ def create_motion_photo(photo_path, video_path, metadata, output_dir):
     Create a motion photo from the provided photo and video paths.
     Save the result in the output directory and return True if successful.
     """
-    print(f"Creating motion photo...")
+    # print(f"Creating motion photo...")
     
     try:
         # Extract filename and extension
@@ -250,7 +285,7 @@ def create_motion_photo(photo_path, video_path, metadata, output_dir):
 
         add_xmp_metadata(metadata, motion_photo_path, offset_in_bytes)
 
-        print("Created successfully.")
+        # print("Created successfully.")
         return True
     except Exception as e:
         print("Error: Motion Photo could not be made.", e)
