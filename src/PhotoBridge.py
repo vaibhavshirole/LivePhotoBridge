@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import shutil
 import subprocess
 from collections import defaultdict
@@ -55,7 +56,12 @@ def group_files_by_contentidentifier(files):
             if file['type'] == 'video':
                 # Try to find a matching photo by filename
                 video_filename = os.path.splitext(os.path.basename(file['path']))[0]
-                matching_photos = [photo for photo in photos if os.path.splitext(os.path.basename(photo['path']))[0] == video_filename]
+                
+                # Modify this to exclude photos whose filenames don't match the pattern
+                # ex. IMG_1001, IMG_1001_1, etc. are matches. IMG_E1001 is not
+                matching_photos = [photo for photo in photos 
+                                   if re.match(r'^{0}(_\d+)?$'.format(re.escape(video_filename)), 
+                                               os.path.splitext(os.path.basename(photo['path']))[0])]
                 
                 for photo in matching_photos:
                     # Check if the CreateDates match (compare only the date part)
@@ -275,6 +281,7 @@ def main(args):
 
         if args.heic:
             print("Converting .HEIC to .JPG")
+            macos_heic_to_jpg.check_directory_for_duplicates(args.dir, args.recurse)
             macos_heic_to_jpg.convert_directory(args.dir)
 
         process_directory(args.dir, args.recurse, args.output or args.dir, args.heic)

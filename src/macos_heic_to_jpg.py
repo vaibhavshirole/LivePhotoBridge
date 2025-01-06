@@ -53,8 +53,50 @@ def convert_directory(input_directory):
     print("Files converted in: ", input_directory)
 
 
-def check_directory_for_duplicates(input_directory, recurse):
-    pass
+def check_directory_for_duplicates(input_directory, recurse=False):
+    """
+    Check the directory for duplicate .HEIC files with the same base filename.
+    If multiple .HEIC files exist with the same base filename (and there is a corresponding .JPG),
+    rename the .HEIC files by appending _1, _2, etc., while keeping the .JPG file unchanged.
+    
+    :param input_directory: The directory to check for duplicate files.
+    :param recurse: Whether to recurse into subdirectories.
+    """
+    # Walk through the directory (and subdirectories if recurse is True)
+    for root, dirs, files in os.walk(input_directory):
+        print(f"Scanning directory: {root}")  # Print the current directory being scanned
+        
+        # Skip subdirectories if recurse is False
+        if not recurse:
+            dirs[:] = []  # Do not recurse into subdirectories
+        
+        # Create a dictionary to store files by base filename (without extension)
+        file_groups = {}
+        
+        for file in files:
+            base_filename, ext = os.path.splitext(file)
+            if base_filename not in file_groups:
+                file_groups[base_filename] = []
+            file_groups[base_filename].append(file)
+
+        # Process each group of files with the same base filename
+        for base_filename, file_list in file_groups.items():
+            
+            heic_files = [file for file in file_list if file.lower().endswith('.heic')]
+            jpg_files = [file for file in file_list if file.lower().endswith('.jpg')]
+
+            if len(heic_files+jpg_files) > 1:
+                # If there are multiple .HEIC files, rename them with counters
+                print(f"Found {len(heic_files)} .HEIC files for base filename '{base_filename}'")
+                
+                # Keep the .JPG file unchanged, rename only the .HEIC files
+                for idx, heic_file in enumerate(heic_files):
+                    new_name = f"{base_filename}_{idx + 1}.HEIC"
+                    old_path = os.path.join(root, heic_file)
+                    new_path = os.path.join(root, new_name)
+
+                    os.rename(old_path, new_path)
+
 
 def create_arg_parser():
     # Creates and returns the ArgumentParser object
