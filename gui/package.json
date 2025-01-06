@@ -1,0 +1,18 @@
+{
+  "name": "gui",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "electron .",
+    "end": "electron-builder"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "python-shell": "^5.0.0"
+  }
+}
