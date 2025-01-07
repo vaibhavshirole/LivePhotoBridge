@@ -33,8 +33,15 @@ def extract_metadata_batch(directory, recurse=False):
     Extract metadata for all files in a directory using ExifTool in a single batch.
     Returns a dictionary keyed by file path with metadata for each file.
     """
+
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Define the relative path to exiftool files
+    exiftool_exec_path = os.path.join(script_dir, '../exiftool/exiftool')
+
     exiftool_pull_data = [
-        "exiftool",
+        exiftool_exec_path,
         "-json",
         "-FilePath",
         "-FileName",
@@ -223,12 +230,13 @@ def add_xmp_metadata(photo_metadata, motion_photo_path, video_offset):
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Define the relative path to the config file
+    # Define the relative path to exiftool files
     config_file_path = os.path.join(script_dir, '../exiftool/google_camera.config')
+    exiftool_exec_path = os.path.join(script_dir, '../exiftool/exiftool')
 
     # Define the ExifTool command to add MicroVideo properties (Haven't figured out MotionPhoto yet)
     exiftool_add_microvideo = [
-        'exiftool', 
+        exiftool_exec_path, 
         '-config', config_file_path, 
         '-overwrite_original', 
         '-m',
