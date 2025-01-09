@@ -1,16 +1,41 @@
 {
-  "name": "gui",
+  "name": "photobridge",
   "version": "1.0.0",
+  "author": "vaibhav",
+  "description": "google motion photos from apple live photos",
   "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "electron .",
-    "end": "electron-builder"
+    "build": "electron-builder"
   },
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "build": {
+    "appId": "com.vaibhav.photobridge",
+    "mac": {
+      "category": "public.app-category.photography",
+      "target": "dmg",
+      "extraResources": [
+        {
+          "from": "src/",
+          "to": "src",
+          "filter": ["**/*"]
+        },
+        {
+          "from": "exiftool/",
+          "to": "exiftool",
+          "filter": ["**/*"]
+        },
+        {
+          "from": "python/",
+          "to": "python",
+          "filter": ["**/*"]
+        }
+      ]
+    }
+  },
   "dependencies": {
+      "python-shell": "^5.0.0"
+  },
+  "devDependencies": {
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "python-shell": "^5.0.0"
