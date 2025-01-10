@@ -61,8 +61,8 @@ compile_commands.json
 /npm/dist
 /npm/path.txt
 /npm/checksums.json
-
 .npmrc
+*/dist
 
 # Generated API definitions
 electron-api.json
