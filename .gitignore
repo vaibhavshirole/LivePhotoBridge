@@ -61,7 +61,7 @@ compile_commands.json
 /npm/dist
 /npm/path.txt
 /npm/checksums.json
-
+*/dist
 .npmrc
 
 # Generated API definitions
