@@ -4,16 +4,34 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ExifTool Write Test</title>
+    <title>ExifTool Read/Write Test</title>
+    <style>
+      body { font-family: sans-serif; margin: 20px; }
+      #status, #readStatus { margin-top: 10px; font-style: italic; }
+      pre { background-color: #f4f4f4; border: 1px solid #ddd; padding: 10px; margin-top: 10px; white-space: pre-wrap; word-wrap: break-word; }
+      .section { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc; }
+    </style>
   </head>
   <body>
-    <h1>ExifTool Write Test</h1>
-    <input type="file" id="fileInput" accept="image/jpeg" />
-    <br /><br />
-    <button id="writeButton">Write Metadata</button>
-    <br /><br />
-    <div id="status"></div>
-    <a id="downloadLink" style="display: none;">Download Modified File</a>
+    <h1>ExifTool Read/Write Test</h1>
 
-    <script type="module" src="/src/main.ts"></script> </body>
+    <input type="file" id="fileInput" accept="image/jpeg,image/heic,image/png,video/quicktime,video/mp4" />
+    <div id="fileStatus">No file selected</div>
+
+    <div class="section">
+      <h2>Write Metadata</h2>
+      <button id="writeButton" disabled>Write GCamera Tags</button>
+      <div id="status"></div>
+      <a id="downloadLink" style="display: none;">Download Modified File</a>
+    </div>
+
+    <div class="section">
+      <h2>Read Specific Metadata</h2>
+      <button id="readButton" disabled>Read Selected Tags (JSON)</button>
+      <div id="readStatus"></div>
+      <pre id="readResult"></pre>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>
