@@ -4,364 +4,253 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-
+from pathlib import Path
 import macos_heic_to_jpg
 
-def emit_progress(message, percentage):
-    """Emit a progress message that can be caught by the Electron app"""
-    progress_data = {
-        "type": "progress",
-        "message": message,
-        "percentage": percentage
-    }
-    print(json.dumps(progress_data))
+def emit_progress(message: str, percentage: float):
+    print(json.dumps({"type": "progress", "message": message, "percentage": percentage}))
     sys.stdout.flush()
 
-
-def emit_log(message):
-    """Emit a log message that can be caught by the Electron app"""
-    log_data = {
-        "type": "log",
-        "message": message
-    }
-    print(json.dumps(log_data))
+def emit_log(message: str):
+    print(json.dumps({"type": "log", "message": message}))
     sys.stdout.flush()
 
-
-def extract_metadata_batch(directory, recurse=False):
-    """
-    Extract metadata for all files in a directory using ExifTool in a single batch.
-    Returns a dictionary keyed by file path with metadata for each file.
-    """
-
-    # Get the directory of the current script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Define the relative path to exiftool files
-    exiftool_exec_path = os.path.join(script_dir, '../exiftool/exiftool')
-
+def extract_metadata_batch(directory: str, recurse: bool = False) -> dict:
+    script_dir = Path(__file__).resolve().parent
+    exiftool_exec_path = script_dir.parent / 'exiftool' / 'exiftool'
+    
     exiftool_pull_data = [
-        exiftool_exec_path,
-        "-json",
-        "-FilePath",
-        "-FileName",
-        "-BaseName",
-        "-ContentIdentifier",
-        "-CreateDate",
-        "-LivePhotoVideoIndex",
-        "-RuntimeScale",
+        str(exiftool_exec_path), "-json", "-FilePath", "-FileName",
+        "-BaseName", "-ContentIdentifier", "-CreateDate",
+        "-LivePhotoVideoIndex", "-RuntimeScale"
     ]
     if recurse:
         exiftool_pull_data.append("-r")
     exiftool_pull_data.append(directory)
-
-    result = subprocess.run(exiftool_pull_data, capture_output=True, text=True)
-    exif_data = json.loads(result.stdout)
-
-    # Organize metadata by file path
-    metadata_by_path = {item["FilePath"]: item for item in exif_data}
-    return metadata_by_path
-
-
-def group_files_by_contentidentifier(files):
-    """
-    Group photos and videos by ContentIdentifier, or fallback to matching by filename and date if necessary.
-    Returns a dictionary where keys are ContentIdentifiers or date-based keys and values are lists of file paths (photos/videos).
-    """
-    groups = defaultdict(list)
     
-    # Store photos separately for matching in fallback case
-    photos = [file for file in files if file['type'] == 'photo']
+    result = subprocess.run(exiftool_pull_data, capture_output=True, text=True)
+    if not result.stdout.strip():
+        return {}
+        
+    exif_data = json.loads(result.stdout)
+    return {item["FilePath"]: item for item in exif_data}
+
+def get_date_part(create_date: str) -> str:
+    if not create_date or not create_date.strip():
+        return ""
+    parts = create_date.strip().split()
+    return parts[0] if parts else ""
+
+def group_files_by_contentidentifier(files: list) -> dict:
+    groups = defaultdict(list)
+    photos = [f for f in files if f['type'] == 'photo']
     
     for file in files:
         content_identifier = file['metadata'].get('ContentIdentifier')
         
         if content_identifier:
-            # If the file has a content identifier, group by it
             groups[content_identifier].append(file)
+        elif file['type'] == 'video':
+            video_filename = Path(file['path']).stem
+            pattern = re.compile(rf'^{re.escape(video_filename)}(_\d+)?$')
+            matching_photos = [
+                p for p in photos 
+                if pattern.match(Path(p['path']).stem)
+            ]
+            
+            matched = False
+            for photo in matching_photos:
+                video_date = get_date_part(file['metadata'].get('CreateDate', ''))
+                photo_date = get_date_part(photo['metadata'].get('CreateDate', ''))
+                
+                if video_date and photo_date and video_date == photo_date:
+                    pid = photo['metadata'].get('ContentIdentifier')
+                    if pid:
+                        groups[pid].append(file)
+                    else:
+                        groups[(video_date, Path(photo['path']).stem)].append(file)
+                    matched = True
+                    break
+            
+            if not matched:
+                groups['unmatched_videos'].append(file)
         else:
-            # Fallback: Video without content identifier, try matching by filename + date
-            if file['type'] == 'video':
-                # Try to find a matching photo by filename
-                video_filename = os.path.splitext(os.path.basename(file['path']))[0]
-                
-                # Modify this to exclude photos whose filenames don't match the pattern
-                # ex. IMG_1001, IMG_1001_1, etc. are matches. IMG_E1001 is not
-                matching_photos = [photo for photo in photos 
-                                   if re.match(r'^{0}(_\d+)?$'.format(re.escape(video_filename)), 
-                                               os.path.splitext(os.path.basename(photo['path']))[0])]
-                
-                for photo in matching_photos:
-                    # Check if the CreateDates match (compare only the date part)
-                    video_create_date = file['metadata'].get('CreateDate')
-                    photo_create_date = photo['metadata'].get('CreateDate')
-                    
-                    if video_create_date and photo_create_date:
-                        video_date = video_create_date.split()[0]  # Extract the date part
-                        photo_date = photo_create_date.split()[0]  # Extract the date part
-                        
-                        if video_date == photo_date:
-                            # If dates match, treat them as a pair
-                            groups[photo['metadata']['ContentIdentifier']].append(file)
-                            break
-                
-                if not matching_photos:
-                    groups['unmatched_videos'].append(file)
-
+            date_part = get_date_part(file['metadata'].get('CreateDate', ''))
+            if date_part:
+                groups[(date_part, Path(file['path']).stem)].append(file)
             else:
-                # If no identifier and not a video, just group by date and filename (fallback case)
-                create_date = file['metadata'].get('CreateDate')
-                if create_date:
-                    date_part = create_date.split()[0]  # Get the date part (YYYY:MM:DD)
-                    groups[date_part, os.path.splitext(os.path.basename(file['path']))[0]].append(file)
-                else:
-                    groups['no_identifier'].append(file)
-    
+                groups['no_identifier'].append(file)
+                
     return groups
 
+def add_xmp_metadata(photo_metadata: dict, motion_photo_path: str, video_offset: int):
+    try:
+        live_photo_video_index = int(photo_metadata.get("LivePhotoVideoIndex", 0))
+        run_time_scale = int(photo_metadata.get("RunTimeScale", 1))
+        if run_time_scale == 0:
+            run_time_scale = 1
+        micro_video_presentation_timestamp_us = int((live_photo_video_index / run_time_scale) * 1000000)
+        
+        script_dir = Path(__file__).resolve().parent
+        config_file_path = script_dir.parent / 'exiftool' / 'google_camera.config'
+        exiftool_exec_path = script_dir.parent / 'exiftool' / 'exiftool'
+        
+        exiftool_add_microvideo = [
+            str(exiftool_exec_path), '-config', str(config_file_path),
+            '-overwrite_original', '-m', '-q',
+            '-XMP-GCamera:MicroVideo=1',
+            '-XMP-GCamera:MicroVideoVersion=1',
+            f'-XMP-GCamera:MicroVideoOffset={video_offset}',
+            f'-XMP-GCamera:MicroVideoPresentationTimestampUs={micro_video_presentation_timestamp_us}',
+            motion_photo_path
+        ]
+        subprocess.run(exiftool_add_microvideo, capture_output=True, text=True)
+    except Exception:
+        pass
 
-def process_directory(directory, recurse, output_dir, heic_conversion):
-    """
-    Process the directory to extract metadata, group files, pair files, and create motion photos.
-    """
+def create_motion_photo(photo_path: str, video_path: str, metadata: dict, output_dir: str) -> bool:
+    try:
+        photo_p = Path(photo_path)
+        base_name = photo_p.stem
+        extension = photo_p.suffix
+        
+        if extension.lower() != ".heic":
+            base_name += ".MP"
+            
+        motion_photo_path = Path(output_dir) / f"{base_name}{extension}"
+        motion_photo_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(motion_photo_path, "wb") as outfile, \
+             open(photo_path, "rb") as photo, \
+             open(video_path, "rb") as video:
+            outfile.write(photo.read())
+            outfile.write(video.read())
+            
+        photo_filesize = os.path.getsize(photo_path)
+        motion_photo_filesize = os.path.getsize(motion_photo_path)
+        offset_in_bytes = motion_photo_filesize - photo_filesize
+        
+        add_xmp_metadata(metadata, str(motion_photo_path), offset_in_bytes)
+        return True
+    except Exception:
+        return False
+
+def process_directory(directory: str, recurse: bool, output_dir: str, heic_conversion: bool):
     emit_progress("Extracting metadata...", 10)
     metadata_by_path = extract_metadata_batch(directory, recurse)
-
+    
     emit_progress("Processing files...", 20)
     files = []
     for file_path, metadata in metadata_by_path.items():
-        ext = os.path.splitext(file_path)[-1].lower()
+        ext = Path(file_path).suffix.lower()
         if ext in ['.jpg', '.jpeg', '.png', '.heic']:
             files.append({'path': file_path, 'metadata': metadata, 'type': 'photo'})
         elif ext in ['.mov', '.mp4']:
             files.append({'path': file_path, 'metadata': metadata, 'type': 'video'})
-
+            
     emit_progress("Grouping files...", 40)
     groups = group_files_by_contentidentifier(files)
-
-    total_groups = len(groups)
+    
+    total_groups = len([k for k in groups.keys() if k != 'unmatched_videos'])
     processed_groups = 0
-
+    
     for group_key, group_files in groups.items():
         if group_key == 'unmatched_videos':
             continue
-
+            
         processed_groups += 1
-        progress = 40 + (processed_groups / total_groups * 50)
+        progress = 40 + (processed_groups / max(total_groups, 1) * 50)
         emit_progress(f"Processing group {processed_groups} of {total_groups}...", progress)
-
+        
         photos = [f for f in group_files if f['type'] == 'photo']
         videos = [f for f in group_files if f['type'] == 'video']
-
+        
         if photos and videos:
             photo = photos[0]
             video = videos[0]
             if create_motion_photo(photo['path'], video['path'], photo['metadata'], output_dir):
-                for file in group_files:
-                    os.remove(file['path'])
+                for f in group_files:
+                    Path(f['path']).unlink(missing_ok=True)
         else:
-            for file in group_files:
-                dest_path = os.path.join(output_dir, os.path.basename(file['path']))
-                os.rename(file['path'], dest_path)
+            for f in group_files:
+                dest_path = Path(output_dir) / Path(f['path']).name
+                Path(f['path']).rename(dest_path)
                 emit_log(f"Moved unmatched photo to: {dest_path}")
-
+                
     emit_progress("Processing unmatched files...", 95)
-    unmatched_videos = groups.get('unmatched_videos', [])
-    for video in unmatched_videos:
-        dest_path = os.path.join(output_dir, os.path.basename(video['path']))
-        os.rename(video['path'], dest_path)
+    for video in groups.get('unmatched_videos', []):
+        dest_path = Path(output_dir) / Path(video['path']).name
+        Path(video['path']).rename(dest_path)
         emit_log(f"Moved unmatched video to: {dest_path}")
-
+        
     emit_progress("Complete!", 100)
 
-
-def process_individual_files(photo_path, video_path, output_dir):
-    """
-    Process individual photo and video files.
-    """
-    # Extract metadata for both files
-    photo_metadata = extract_metadata_batch(photo_path)  # Extract metadata for the photo
-    video_metadata = extract_metadata_batch(video_path)  # Extract metadata for the video
-
+def process_individual_files(photo_path: str, video_path: str, output_dir: str):
+    photo_metadata = extract_metadata_batch(photo_path)
+    video_metadata = extract_metadata_batch(video_path)
+    
     files = []
     for file_path, metadata in photo_metadata.items():
         files.append({'path': file_path, 'metadata': metadata, 'type': 'photo'})
     for file_path, metadata in video_metadata.items():
         files.append({'path': file_path, 'metadata': metadata, 'type': 'video'})
-
+        
     groups = group_files_by_contentidentifier(files)
-
-    # Process each group
+    
     for group_key, group_files in groups.items():
         photos = [f for f in group_files if f['type'] == 'photo']
         videos = [f for f in group_files if f['type'] == 'video']
-
+        
         if photos and videos:
-            # Pick the first photo and first video as the pair
             photo = photos[0]
             video = videos[0]
-
-            # Create motion photo
             if create_motion_photo(photo['path'], video['path'], photo['metadata'], output_dir):
-                # Delete all photos and videos in the group after creating motion photo
-                for file in group_files:
-                    os.remove(file['path'])
-
+                for f in group_files:
+                    Path(f['path']).unlink(missing_ok=True)
         else:
-            # If no matching video/photo pair, save unmatched files as-is
-            for file in group_files:
-                dest_path = os.path.join(output_dir, os.path.basename(file['path']))
-                os.rename(file['path'], dest_path)
-                print(f"Saved file: {dest_path}")
-
-
-def add_xmp_metadata(photo_metadata, motion_photo_path, video_offset):
-    """Adds XMP metadata to the merged image indicating the byte offset in the file where the video begins.
-    :param merged_file: The path to the file that has the photo and video merged together.
-    :param offset: The number of bytes from EOF to the beginning of the video.
-    :return: None
-    """
-    print(f"Adding metadata for {os.path.basename(motion_photo_path)}")
-
-    LivePhotoVideoIndex = int(photo_metadata["LivePhotoVideoIndex"])
-    RunTimeScale = int(photo_metadata["RunTimeScale"])
-    MicroVideoPresentationTimestampUs = int((LivePhotoVideoIndex/RunTimeScale)*1000000)
-
-    # Get the directory of the current script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Define the relative path to exiftool files
-    config_file_path = os.path.join(script_dir, '../exiftool/google_camera.config')
-    exiftool_exec_path = os.path.join(script_dir, '../exiftool/exiftool')
-
-    # Define the ExifTool command to add MicroVideo properties (Haven't figured out MotionPhoto yet)
-    exiftool_add_microvideo = [
-        exiftool_exec_path, 
-        '-config', config_file_path, 
-        '-overwrite_original', 
-        '-m',
-        '-q',
-        '-XMP-GCamera:MicroVideo=1', 
-        '-XMP-GCamera:MicroVideoVersion=1', 
-        '-XMP-GCamera:MicroVideoOffset=' + str(video_offset) + '', 
-        '-XMP-GCamera:MicroVideoPresentationTimestampUs=' + str(MicroVideoPresentationTimestampUs) + '', 
-        motion_photo_path
-    ]
-    try:
-        # TODO: If I don't capture output, it will explain that .HEIC is failing. 
-        #       Currently don't know how to get this to work for .HEIC so I'm not 
-        #       returning error and just letting the .HEIC get remade in output_dir
-        #       which actually is the intended behavior. Could just do without the 
-        #       fact that it's working thanks to an error. :(
-        subprocess.run(exiftool_add_microvideo, capture_output=True, text=True)
-    except Exception as e:
-        print("Error: Couldn't add metadata.", e)
-
-    return
-
-
-def create_motion_photo(photo_path, video_path, metadata, output_dir):
-    """
-    Create a motion photo from the provided photo and video paths.
-    Save the result in the output directory and return True if successful.
-    """
-    # print(f"Creating motion photo...")
-    
-    try:
-        # Extract filename and extension
-        base_name, extension = os.path.splitext(os.path.basename(photo_path))
-
-        # Check if the photo extension is not .heic and block .HEIC from getting .MP
-        if extension.lower() != ".heic":
-            base_name += ".MP" 
-        
-        # Construct the motion photo path
-        motion_photo_path = os.path.join(output_dir, f"{base_name}{extension}")
-        os.makedirs(os.path.dirname(motion_photo_path), exist_ok=True)
-
-        # Combine the photo and video into the motion photo
-        with open(motion_photo_path, "wb") as outfile, open(photo_path, "rb") as photo, open(video_path, "rb") as video:
-            outfile.write(photo.read())
-            outfile.write(video.read())
-        
-        # The 'offset' field in the XMP metadata should be the offset (in bytes) 
-        # from the end of the file to the part where the video portion of the merged file begins. 
-        # In other words, merged size - photo_only_size = offset.
-        photo_filesize = os.path.getsize(photo_path)
-        motion_photo_filesize = os.path.getsize(motion_photo_path)
-        offset_in_bytes = motion_photo_filesize - photo_filesize
-
-        add_xmp_metadata(metadata, motion_photo_path, offset_in_bytes)
-
-        # print("Created successfully.")
-        return True
-    except Exception as e:
-        print("Error: Motion Photo could not be made.", e)
-        return False
-
+            for f in group_files:
+                dest_path = Path(output_dir) / Path(f['path']).name
+                Path(f['path']).rename(dest_path)
 
 def main(args):
-    # Check if --output directory exists, if not, create it
-    if args.output:
-        if not os.path.isdir(args.output):
-            print(f"Output directory '{args.output}' does not exist. Creating it now...")
-            os.makedirs(args.output)  # Create the directory if it doesn't exist
-            print(f"Directory '{args.output}' created successfully.")
-
-
+    out_dir = args.output
+    if out_dir:
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
+        
     if args.dir:
-        # Check if the directory exists
-        if not os.path.isdir(args.dir):
-            print(f"Error: The directory '{args.dir}' does not exist or is not a valid directory.")
-            exit(1)
-
-        # Check if the directory is empty of files (ignoring subdirectories)
-        files_in_dir = [f for f in os.listdir(args.dir) if os.path.isfile(os.path.join(args.dir, f))]
-        if not files_in_dir:  # If the list of files is empty
-            print(f"Error: The directory '{args.dir}' does not contain any files.")
-            exit(1)
-
+        input_dir = Path(args.dir)
+        if not input_dir.is_dir():
+            sys.exit(1)
+            
+        has_files = any(input_dir.iterdir())
+        if not has_files:
+            sys.exit(1)
+            
         if args.heic:
-            print("Converting .HEIC to .JPG")
             macos_heic_to_jpg.check_directory_for_duplicates(args.dir, args.recurse)
             macos_heic_to_jpg.convert_directory(args.dir)
-
-        process_directory(args.dir, args.recurse, args.output or args.dir, args.heic)
-
-    elif args.photo and args.video:
-        # Check if the photo file exists
-        if not os.path.isfile(args.photo):
-            print(f"Error: The photo file '{args.photo}' does not exist or is not a valid file.")
-            exit(1)
+            
+        process_directory(args.dir, args.recurse, out_dir or args.dir, args.heic)
         
-        # Check if the video file exists
-        if not os.path.isfile(args.video):
-            print(f"Error: The video file '{args.video}' does not exist or is not a valid file.")
-            exit(1)
-
-        if args.heic and args.photo.lower().endswith('.heic'):
-            print("Converting .HEIC to .JPG")
-            photo_path = macos_heic_to_jpg.convert_file(args.photo)
-        else:
-            photo_path = args.photo
-
-        process_individual_files(photo_path, args.video, args.output or os.path.dirname(args.photo))
-
+    elif args.photo and args.video:
+        if not Path(args.photo).is_file() or not Path(args.video).is_file():
+            sys.exit(1)
+            
+        photo_path = args.photo
+        if args.heic and photo_path.lower().endswith('.heic'):
+            photo_path = macos_heic_to_jpg.convert_file(args.photo) or photo_path
+            
+        process_individual_files(photo_path, args.video, out_dir or str(Path(args.photo).parent))
     else:
-        print("Error: You must provide either --dir or both --photo and --video.")
-        exit(1)
-
+        sys.exit(1)
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(
-        description='Merges a photo and video into a MotionPhoto-formatted Google Motion Photo'
-    )
-    parser.add_argument('--dir', type=str, help='Process a directory for photos/videos. Takes precedence over --photo/--video.')
-    parser.add_argument('--photo', type=str, help='Path to the JPEG photo to add.')
-    parser.add_argument('--video', type=str, help='Path to the MOV video to add.')
-    parser.add_argument('--output', type=str, help='Path to where files should be written out to. Defaults to --dir')
-    parser.add_argument('--recurse', help='Recursively process a directory. Only applies if --dir is also provided.', action='store_true')
-    parser.add_argument('--heic', help='Convert all .HEIC to .JPG (macOS only).', action='store_true')
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dir', type=str)
+    parser.add_argument('--photo', type=str)
+    parser.add_argument('--video', type=str)
+    parser.add_argument('--output', type=str)
+    parser.add_argument('--recurse', action='store_true')
+    parser.add_argument('--heic', action='store_true')
     main(parser.parse_args())
