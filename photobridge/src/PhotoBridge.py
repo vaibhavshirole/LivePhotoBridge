@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import shutil
 import subprocess
 import sys
 from collections import defaultdict
@@ -89,48 +90,49 @@ def add_xmp_metadata(photo_metadata: dict, motion_photo_path: str, video_offset:
         run_time_scale = int(photo_metadata.get("RunTimeScale", 1))
         if run_time_scale == 0:
             run_time_scale = 1
-        micro_video_presentation_timestamp_us = int((live_photo_video_index / run_time_scale) * 1000000)
+        presentation_timestamp_us = int((live_photo_video_index / run_time_scale) * 1000000)
         
         script_dir = Path(__file__).resolve().parent
         config_file_path = script_dir.parent / 'exiftool' / 'google_camera.config'
         exiftool_exec_path = script_dir.parent / 'exiftool' / 'exiftool'
         
-        exiftool_add_microvideo = [
+        exiftool_add_metadata = [
             str(exiftool_exec_path), '-config', str(config_file_path),
             '-overwrite_original', '-m', '-q',
             '-XMP-GCamera:MicroVideo=1',
             '-XMP-GCamera:MicroVideoVersion=1',
             f'-XMP-GCamera:MicroVideoOffset={video_offset}',
-            f'-XMP-GCamera:MicroVideoPresentationTimestampUs={micro_video_presentation_timestamp_us}',
+            f'-XMP-GCamera:MicroVideoPresentationTimestampUs={presentation_timestamp_us}',
+            '-XMP-GCamera:MotionPhoto=1',
+            '-XMP-GCamera:MotionPhotoVersion=1',
+            f'-XMP-GCamera:MotionPhotoPresentationTimestampUs={presentation_timestamp_us}',
             motion_photo_path
         ]
-        subprocess.run(exiftool_add_microvideo, capture_output=True, text=True)
+        subprocess.run(exiftool_add_metadata, capture_output=True, text=True)
     except Exception:
         pass
 
 def create_motion_photo(photo_path: str, video_path: str, metadata: dict, output_dir: str) -> bool:
     try:
         photo_p = Path(photo_path)
-        base_name = photo_p.stem
+        base_name = f"{photo_p.stem}.MP"
         extension = photo_p.suffix
         
-        if extension.lower() != ".heic":
-            base_name += ".MP"
-            
         motion_photo_path = Path(output_dir) / f"{base_name}{extension}"
         motion_photo_path.parent.mkdir(parents=True, exist_ok=True)
         
-        with open(motion_photo_path, "wb") as outfile, \
-             open(photo_path, "rb") as photo, \
-             open(video_path, "rb") as video:
-            outfile.write(photo.read())
+        video_filesize = os.path.getsize(video_path)
+        
+        # Step 1: Copy clean image to destination first
+        shutil.copyfile(photo_path, motion_photo_path)
+        
+        # Step 2: Inject XMP metadata into the clean photo file FIRST (prevents ISO container parsing errors on HEIC)
+        add_xmp_metadata(metadata, str(motion_photo_path), video_filesize)
+        
+        # Step 3: Append raw video bytes to the tagged photo
+        with open(motion_photo_path, "ab") as outfile, open(video_path, "rb") as video:
             outfile.write(video.read())
             
-        photo_filesize = os.path.getsize(photo_path)
-        motion_photo_filesize = os.path.getsize(motion_photo_path)
-        offset_in_bytes = motion_photo_filesize - photo_filesize
-        
-        add_xmp_metadata(metadata, str(motion_photo_path), offset_in_bytes)
         return True
     except Exception:
         return False
