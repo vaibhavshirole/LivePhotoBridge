@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LivePhotoBridge — Motion Photo Muxer Demo</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #181b24;
+      --surface-elevated: #222634;
+      --border: #2e3446;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --accent: #10b981;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --radius: 12px;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    header {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .dropzone-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 640px) {
+      .dropzone-grid { grid-template-columns: 1fr; }
+    }
+
+    .drop-box {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 28px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--surface-elevated);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .drop-box:hover, .drop-box.dragover {
+      border-color: var(--primary);
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .drop-box.loaded {
+      border-color: var(--accent);
+      border-style: solid;
+      background: rgba(16, 185, 129, 0.08);
+    }
+
+    .drop-icon {
+      font-size: 32px;
+      margin-bottom: 4px;
+    }
+
+    .drop-title {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .drop-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .file-status {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--accent);
+      margin-top: 4px;
+      word-break: break-all;
+    }
+
+    input[type="file"] { display: none; }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    button.secondary {
+      background: var(--surface-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: var(--border);
+    }
+
+    /* Live Player Preview */
+    .preview-section {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .preview-section.visible {
+      display: flex;
+    }
+
+    .player-container {
+      position: relative;
+      width: 100%;
+      max-height: 420px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: black;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .preview-media {
+      max-width: 100%;
+      max-height: 420px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .motion-badge {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      transition: background 0.2s;
+      user-select: none;
+    }
+
+    .motion-badge:hover {
+      background: rgba(0, 0, 0, 0.85);
+    }
+
+    .motion-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+
+    /* Byte Structure Map */
+    .byte-map {
+      display: flex;
+      height: 38px;
+      border-radius: 8px;
+      overflow: hidden;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+    }
+
+    .map-img {
+      background: #2563eb;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+    }
+
+    .map-xmp {
+      background: #8b5cf6;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+    }
+
+    .map-vid {
+      background: #10b981;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      white-space: nowrap;
+    }
+
+    /* Inspector Code */
+    pre {
+      background: #090b10;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #38bdf8;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>LivePhotoBridge — In-Browser Motion Photo Muxer</h1>
+      <p class="subtitle">Combines Apple Live Photo pairs into native Google Motion Photos with XMP injection client-side.</p>
+    </header>
+
+    <div class="card">
+      <div class="dropzone-grid">
+        <!-- Photo Dropzone -->
+        <div class="drop-box" id="photoDrop" onclick="document.getElementById('photoInput').click()">
+          <div class="drop-icon">📷</div>
+          <div class="drop-title">Select Still Photo</div>
+          <div class="drop-desc">JPEG or HEIC image (.jpg, .jpeg, .heic)</div>
+          <div class="file-status" id="photoStatus">No file chosen</div>
+          <input type="file" id="photoInput" accept="image/jpeg,image/heic,.heic,.jpg,.jpeg">
+        </div>
+
+        <!-- Video Dropzone -->
+        <div class="drop-box" id="videoDrop" onclick="document.getElementById('videoInput').click()">
+          <div class="drop-icon">🎥</div>
+          <div class="drop-title">Select Live Video Clip</div>
+          <div class="drop-desc">QuickTime or MP4 clip (.mov, .mp4)</div>
+          <div class="file-status" id="videoStatus">No file chosen</div>
+          <input type="file" id="videoInput" accept="video/quicktime,video/mp4,.mov,.mp4">
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="generateSampleBtn" class="secondary">⚡ Load Demo Sample Pair</button>
+        <button id="muxBtn" disabled>🚀 Create Motion Photo</button>
+      </div>
+    </div>
+
+    <!-- Output & Live Player Section -->
+    <div class="card preview-section" id="previewCard">
+      <h2 style="font-size: 18px;">Live Motion Photo Preview</h2>
+      
+      <div class="player-container">
+        <img id="previewImg" class="preview-media" alt="Motion Photo Preview">
+        <video id="previewVid" class="preview-media" style="display:none;" loop playsinline></video>
+        
+        <div class="motion-badge" id="motionToggle" title="Click to play motion">
+          <div class="motion-dot"></div>
+          <span>▶ MOTION</span>
+        </div>
+      </div>
+
+      <h3 style="font-size: 14px; color: var(--text-muted);">Binary Structure Map</h3>
+      <div class="byte-map" id="byteMap">
+        <div class="map-img" id="mapImg">JPEG Image</div>
+        <div class="map-xmp">XMP Header</div>
+        <div class="map-vid" id="mapVid">Video Stream (Offset: 0B)</div>
+      </div>
+
+      <h3 style="font-size: 14px; color: var(--text-muted);">Injected Google Camera XMP Packet</h3>
+      <pre id="xmpCode"></pre>
+
+      <div class="actions" style="margin-top: 8px;">
+        <button id="downloadBtn">⬇️ Download Motion Photo (.MP.jpg)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let photoData = null;
+    let videoData = null;
+    let photoName = "";
+    let videoName = "";
+    let muxedBlob = null;
+
+    const photoInput = document.getElementById('photoInput');
+    const videoInput = document.getElementById('videoInput');
+    const photoStatus = document.getElementById('photoStatus');
+    const videoStatus = document.getElementById('videoStatus');
+    const photoDrop = document.getElementById('photoDrop');
+    const videoDrop = document.getElementById('videoDrop');
+    const muxBtn = document.getElementById('muxBtn');
+    const generateSampleBtn = document.getElementById('generateSampleBtn');
+    const previewCard = document.getElementById('previewCard');
+    const previewImg = document.getElementById('previewImg');
+    const previewVid = document.getElementById('previewVid');
+    const motionToggle = document.getElementById('motionToggle');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const xmpCode = document.getElementById('xmpCode');
+    const mapImg = document.getElementById('mapImg');
+    const mapVid = document.getElementById('mapVid');
+
+    function checkReady() {
+      muxBtn.disabled = !(photoData && videoData);
+    }
+
+    // Handle File Drop & Selection
+    photoInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) loadPhoto(file);
+    });
+
+    videoInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) loadVideo(file);
+    });
+
+    async function loadPhoto(file) {
+      photoName = file.name;
+      photoData = new Uint8Array(await file.arrayBuffer());
+      photoStatus.textContent = `✓ ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      photoDrop.classList.add('loaded');
+      checkReady();
+    }
+
+    async function loadVideo(file) {
+      videoName = file.name;
+      videoData = new Uint8Array(await file.arrayBuffer());
+      videoStatus.textContent = `✓ ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      videoDrop.classList.add('loaded');
+      checkReady();
+    }
+
+    // Demo Sample Generator (Creates an animated canvas video and static frame)
+    generateSampleBtn.addEventListener('click', async () => {
+      generateSampleBtn.disabled = true;
+      generateSampleBtn.textContent = "⏳ Generating demo pair...";
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+
+      // 1. Draw Photo Frame
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, 640, 480);
+      ctx.fillStyle = '#3b82f6';
+      ctx.beginPath();
+      ctx.arc(320, 240, 80, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Apple Live Photo Demo', 320, 248);
+
+      const photoBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+      await loadPhoto(new File([photoBlob], 'DEMO_LIVE_PHOTO.jpg', { type: 'image/jpeg' }));
+
+      // 2. Generate short webm video stream
+      const stream = canvas.captureStream(30);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      const chunks = [];
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+      
+      let angle = 0;
+      const animInterval = setInterval(() => {
+        angle += 0.1;
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, 640, 480);
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath();
+        ctx.arc(320 + Math.cos(angle) * 100, 240 + Math.sin(angle) * 50, 40, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('Motion Stream', 320, 245);
+      }, 33);
+
+      mediaRecorder.start();
+      setTimeout(() => {
+        mediaRecorder.stop();
+        clearInterval(animInterval);
+      }, 1500);
+
+      mediaRecorder.onstop = async () => {
+        const vidBlob = new Blob(chunks, { type: 'video/mp4' });
+        await loadVideo(new File([vidBlob], 'DEMO_LIVE_VIDEO.mov', { type: 'video/mp4' }));
+        generateSampleBtn.disabled = false;
+        generateSampleBtn.textContent = "⚡ Load Demo Sample Pair";
+      };
+    });
+
+    // Muxing Engine: Injects Google Camera APP1 XMP into JPEG & appends video bytes
+    function createMotionPhoto(photoBytes, videoBytes, videoOffset, presentationTimestampUs) {
+      const xmpXml = `<?xpacket begin='﻿' id='W5M0MpCehiHzreSzNTczkc9d'?>
+<x:xmpmeta xmlns:x='adobe:ns:meta/'>
+<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>
+ <rdf:Description rdf:about='' xmlns:GCamera='http://ns.google.com/photos/1.0/camera/'>
+  <GCamera:MicroVideo>1</GCamera:MicroVideo>
+  <GCamera:MicroVideoOffset>${videoOffset}</GCamera:MicroVideoOffset>
+  <GCamera:MicroVideoPresentationTimestampUs>${presentationTimestampUs}</GCamera:MicroVideoPresentationTimestampUs>
+  <GCamera:MicroVideoVersion>1</GCamera:MicroVideoVersion>
+  <GCamera:MotionPhoto>1</GCamera:MotionPhoto>
+  <GCamera:MotionPhotoPresentationTimestampUs>${presentationTimestampUs}</GCamera:MotionPhotoPresentationTimestampUs>
+  <GCamera:MotionPhotoVersion>1</GCamera:MotionPhotoVersion>
+ </rdf:Description>
+</rdf:RDF>
+</x:xmpmeta>
+<?xpacket end='w'?>`;
+
+      // Check if JPEG (starts with 0xFF 0xD8)
+      let taggedPhotoBytes;
+      if (photoBytes[0] === 0xFF && photoBytes[1] === 0xD8) {
+        const headerStr = "http://ns.adobe.com/xap/1.0/\0";
+        const encoder = new TextEncoder();
+        const headerBytes = encoder.encode(headerStr);
+        const xmlBytes = encoder.encode(xmpXml);
+        
+        const app1Length = 2 + headerBytes.length + xmlBytes.length;
+        const app1Segment = new Uint8Array(2 + app1Length);
+        app1Segment[0] = 0xFF;
+        app1Segment[1] = 0xE1;
+        app1Segment[2] = (app1Length >> 8) & 0xFF;
+        app1Segment[3] = app1Length & 0xFF;
+        app1Segment.set(headerBytes, 4);
+        app1Segment.set(xmlBytes, 4 + headerBytes.length);
+
+        // Insert APP1 right after SOI (index 2)
+        taggedPhotoBytes = new Uint8Array(photoBytes.length + app1Segment.length);
+        taggedPhotoBytes.set(photoBytes.subarray(0, 2), 0);
+        taggedPhotoBytes.set(app1Segment, 2);
+        taggedPhotoBytes.set(photoBytes.subarray(2), 2 + app1Segment.length);
+      } else {
+        // Raw HEIC or fallback
+        taggedPhotoBytes = photoBytes;
+      }
+
+      // Concatenate: [Tagged Photo Bytes] + [Video Bytes]
+      const totalBytes = new Uint8Array(taggedPhotoBytes.length + videoBytes.length);
+      totalBytes.set(taggedPhotoBytes, 0);
+      totalBytes.set(videoBytes, taggedPhotoBytes.length);
+
+      return {
+        blob: new Blob([totalBytes], { type: 'image/jpeg' }),
+        xmpXml,
+        taggedPhotoLength: taggedPhotoBytes.length
+      };
+    }
+
+    muxBtn.addEventListener('click', () => {
+      const videoOffset = videoData.length;
+      const presentationTimestampUs = 750000; // 0.75s midpoint default
+
+      const result = createMotionPhoto(photoData, videoData, videoOffset, presentationTimestampUs);
+      muxedBlob = result.blob;
+
+      // Setup Previews
+      const photoBlob = new Blob([photoData], { type: 'image/jpeg' });
+      const videoBlob = new Blob([videoData], { type: 'video/mp4' });
+
+      previewImg.src = URL.createObjectURL(photoBlob);
+      previewVid.src = URL.createObjectURL(videoBlob);
+      xmpCode.textContent = result.xmpXml;
+
+      // Update Byte Map visual proportions
+      mapImg.style.flex = "1";
+      mapVid.style.flex = "1";
+      mapVid.textContent = `Video Stream (${(videoOffset / 1024).toFixed(1)} KB)`;
+
+      previewCard.classList.add('visible');
+      previewCard.scrollIntoView({ behavior: 'smooth' });
+    });
+
+    // Motion Photo Player Toggle Interaction
+    let isPlaying = false;
+    motionToggle.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      if (isPlaying) {
+        previewImg.style.display = 'none';
+        previewVid.style.display = 'block';
+        previewVid.play();
+        motionToggle.querySelector('span').textContent = '⏹ STILL';
+      } else {
+        previewVid.pause();
+        previewVid.currentTime = 0;
+        previewVid.style.display = 'none';
+        previewImg.style.display = 'block';
+        motionToggle.querySelector('span').textContent = '▶ MOTION';
+      }
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (!muxedBlob) return;
+      const base = photoName.replace(/\.[^/.]+$/, "");
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(muxedBlob);
+      a.download = `${base}.MP.jpg`;
+      a.click();
+    });
+  </script>
+</body>
+</html>
