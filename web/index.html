@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LivePhotoBridge — Apple Live Photos to Google Motion Photos</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="libs/jszip.min.js"></script>
+  <script src="libs/qrcode.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <header>
+      <div class="logo-badge">
+        <span>⚡</span> Fast Local Muxer
+      </div>
+      <h1>LivePhotoBridge</h1>
+      <p class="subtitle">Convert Apple Live Photos (<code>.HEIC</code> / <code>.JPG</code> + <code>.MOV</code>) into native Google Motion Photos playable on Google Pixel and Google Photos.</p>
+    </header>
+
+    <!-- Drop Zone Section -->
+    <div class="card">
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+        </div>
+        <div class="dropzone-title">Drop your Live Photos & Videos here</div>
+        <div class="dropzone-desc">Drop photo and video pairs (e.g. <code>IMG_0001.HEIC</code> + <code>IMG_0001.MOV</code>) or select a folder from your camera roll.</div>
+        <div class="dropzone-actions">
+          <button type="button" class="dropzone-btn" id="selectFilesBtn">Select Files</button>
+          <button type="button" class="dropzone-btn" id="selectFolderBtn">Select Folder</button>
+        </div>
+        <input type="file" id="fileInput" multiple accept=".heic,.heif,.jpg,.jpeg,.mov,.mp4">
+        <input type="file" id="folderInput" webkitdirectory directory multiple>
+      </div>
+
+      <!-- Detection Stats Bar -->
+      <div class="stats-bar" id="statsBar">
+        <div class="stat-pills">
+          <div class="stat-pill">Photos: <strong id="photoCount">0</strong></div>
+          <div class="stat-pill">Videos: <strong id="videoCount">0</strong></div>
+          <div class="stat-pill matched">Matched Pairs: <strong id="matchCount">0</strong></div>
+        </div>
+        <button type="button" class="dropzone-btn" id="clearBtn">Clear All</button>
+      </div>
+
+      <!-- Detected Pairs List -->
+      <div class="pairs-container" id="pairsContainer">
+        <div style="font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Detected Live Photo Pairs</div>
+        <div id="pairsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        <button type="button" class="btn btn-accent" id="convertBtn" disabled style="margin-top: 8px;">
+          <span>✨ Convert to Motion Photos</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress Card -->
+    <div class="card progress-card" id="progressCard">
+      <div class="progress-header">
+        <span>Processing Motion Photos...</span>
+        <span id="progressPercent">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="progress-details" id="progressDetails">Initializing pipeline...</div>
+    </div>
+
+    <!-- Output & Download Card -->
+    <div class="card results-card" id="resultsCard">
+      <div class="success-banner">
+        <span>✓</span>
+        <span id="successMessage">Successfully converted 0 Motion Photos!</span>
+      </div>
+
+      <div class="download-actions">
+        <button type="button" class="btn" id="downloadZipBtn">
+          <span>📦 Download All (.zip)</span>
+        </button>
+        <button type="button" class="btn btn-secondary" id="showQrBtn">
+          <span>📱 Scan QR Code (Send to Phone)</span>
+        </button>
+      </div>
+
+      <!-- QR Code Mobile Sharing Drawer -->
+      <div class="qr-section" id="qrSection">
+        <div class="qr-title">Scan to Download on Mobile Device</div>
+        <div class="qr-subtitle">Scan this QR code with your iPhone or Android camera to instantly download the ZIP bundle onto your mobile device.</div>
+        <div class="qr-box" id="qrCodeBox"></div>
+        <div style="display: flex; align-items: center; gap: 8px; max-width: 100%;">
+          <div class="qr-url" id="qrUrl">http://...</div>
+          <button type="button" class="dropzone-btn" id="copyLinkBtn">📋 Copy Link</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Preview Card -->
+    <div class="card preview-card" id="previewCard">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-weight: 700; font-size: 15px;" id="previewTitle">Motion Photo Preview</span>
+        <span style="font-size: 12px; color: var(--text-dim);">Google Pixel / Google Photos Simulation</span>
+      </div>
+
+      <div class="player-box">
+        <img id="previewImg" class="preview-media" alt="Motion Photo Still">
+        <video id="previewVid" class="preview-media" loop playsinline muted></video>
+        <div class="motion-badge" id="motionToggle">
+          <div class="motion-dot"></div>
+          <span>▶ MOTION</span>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      🔒 100% Client-Side Processing • Your photos never leave your device
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

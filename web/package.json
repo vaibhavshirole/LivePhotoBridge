@@ -1,0 +1,18 @@
+{
+  "name": "livephotobridge-web",
+  "version": "1.0.0",
+  "description": "Browser-based Live Photo to Google Motion Photo converter with QR code sharing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "live-photo",
+    "motion-photo",
+    "google-camera",
+    "heic",
+    "jpeg"
+  ],
+  "author": "LivePhotoBridge",
+  "license": "MIT"
+}
