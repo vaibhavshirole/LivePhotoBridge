@@ -23,6 +23,7 @@ Cargo.lock
 *.heic
 *.jpg
 *.png
+!web/*.png
 *.mov
 *.mp4
 *.csv
