@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
     PipelineResult result = muxer.process(options);
 
     if (!options.jsonOutput) {
-        std::cout << "\n🎉 Finished Processing!\n";
+        std::cout << "\nFinished Processing!\n";
         std::cout << "───────────────────────────────────────────────\n";
         std::cout << "  Live Photo Pairs Found     : " << result.pairsFound << "\n";
         std::cout << "  Motion Photos Created      : " << result.pairsSucceeded << "\n";
