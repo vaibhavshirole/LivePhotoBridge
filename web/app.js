@@ -453,9 +453,9 @@ document.addEventListener('DOMContentLoaded', () => {
     convertBtn.disabled = !hasFiles;
 
     if (matchedPairs.length > 0) {
-      convertBtn.innerHTML = `<span>✨ Convert & Package for Pixel (${totalItems} items)</span>`;
+      convertBtn.innerHTML = `<span>Package for Pixel (${totalItems} items)</span>`;
     } else {
-      convertBtn.innerHTML = `<span>📦 Package ${totalItems} items for Pixel</span>`;
+      convertBtn.innerHTML = `<span>Package ${totalItems} items for Pixel</span>`;
     }
 
     // Reset results on new changes
