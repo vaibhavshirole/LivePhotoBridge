@@ -213,6 +213,16 @@ input[type="file"] {
   color: var(--accent);
 }
 
+/* Primary Action Bar */
+.action-bar {
+  display: none;
+  width: 100%;
+}
+
+.action-bar.visible {
+  display: block;
+}
+
 /* Pairs List */
 .pairs-container {
   display: none;
@@ -263,6 +273,11 @@ input[type="file"] {
 .pair-badge.jpeg {
   background: rgba(59, 130, 246, 0.15);
   color: var(--primary);
+}
+
+.pair-badge.passthrough {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
 }
 
 .pair-name {

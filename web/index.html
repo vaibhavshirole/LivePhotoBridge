@@ -28,33 +28,37 @@
             <line x1="12" y1="3" x2="12" y2="15"></line>
           </svg>
         </div>
-        <div class="dropzone-title">Drop your Live Photos & Videos here</div>
-        <div class="dropzone-desc">Drop photo and video pairs (e.g. <code>IMG_0001.HEIC</code> + <code>IMG_0001.MOV</code>) or select a folder from your camera roll.</div>
+        <div class="dropzone-title">Drop your Camera Roll or Live Photos here</div>
+        <div class="dropzone-desc">Drop an entire folder or select files. Live Photos are upgraded to Google Motion Photos; all PNGs, regular videos, and photos are bundled alongside seamlessly for your Pixel.</div>
+        <div style="font-size: 12px; color: #60a5fa; background: rgba(59, 130, 246, 0.08); padding: 4px 10px; border-radius: 6px; display: inline-block;">📱 <strong>iPhone Tip:</strong> Choose "Choose Files" from the menu to pick Live Photo pairs (.HEIC + .MOV) from the Files app.</div>
         <div class="dropzone-actions">
           <button type="button" class="dropzone-btn" id="selectFilesBtn">Select Files</button>
           <button type="button" class="dropzone-btn" id="selectFolderBtn">Select Folder</button>
         </div>
-        <input type="file" id="fileInput" multiple accept=".heic,.heif,.jpg,.jpeg,.mov,.mp4">
+        <input type="file" id="fileInput" multiple accept="image/*,video/*,.heic,.heif,.mov">
         <input type="file" id="folderInput" webkitdirectory directory multiple>
       </div>
 
       <!-- Detection Stats Bar -->
       <div class="stats-bar" id="statsBar">
         <div class="stat-pills">
-          <div class="stat-pill">Photos: <strong id="photoCount">0</strong></div>
-          <div class="stat-pill">Videos: <strong id="videoCount">0</strong></div>
-          <div class="stat-pill matched">Matched Pairs: <strong id="matchCount">0</strong></div>
+          <div class="stat-pill">⚡ Live Photos: <strong id="livePhotoCount">0</strong></div>
+          <div class="stat-pill">📁 Other Media: <strong id="otherMediaCount">0</strong></div>
+          <div class="stat-pill matched">📦 Total for Pixel: <strong id="totalCount">0</strong></div>
         </div>
         <button type="button" class="dropzone-btn" id="clearBtn">Clear All</button>
       </div>
 
-      <!-- Detected Pairs List -->
-      <div class="pairs-container" id="pairsContainer">
-        <div style="font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Detected Live Photo Pairs</div>
-        <div id="pairsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
-        <button type="button" class="btn btn-accent" id="convertBtn" disabled style="margin-top: 8px;">
-          <span>✨ Convert to Motion Photos</span>
+      <!-- Primary Convert & Package Action (Above the fold) -->
+      <div class="action-bar" id="actionBar">
+        <button type="button" class="btn btn-accent" id="convertBtn" disabled style="width: 100%; font-size: 16px; padding: 16px;">
+          <span>✨ Convert & Package for Pixel</span>
         </button>
+      </div>
+
+      <!-- Detected Items List -->
+      <div class="pairs-container" id="pairsContainer">
+        <div id="pairsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
       </div>
     </div>
 

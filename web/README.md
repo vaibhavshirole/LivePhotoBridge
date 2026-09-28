@@ -7,12 +7,12 @@ A fast, zero-cloud web application for transforming Apple Live Photo pairs (`.HE
 ## Features
 
 - **100% Client-Side In-Browser Muxing**: Fast, privacy-first conversion. Photos never upload to an external cloud.
-- **Drag & Drop Unified Input**: Drop individual photos/videos or entire camera roll folders.
-- **Automatic Live Photo Pairing**: Automatically groups photos and matching motion video streams.
-- **Real-Time Progress Bar**: Smooth percentage tracking with live step descriptions.
-- **ZIP Bundle Download**: Download all processed Motion Photos in a single `.zip` file with one click.
-- **Mobile QR Code Sharing**: Scan the on-screen QR code with your iPhone or Android camera to download the generated Motion Photos directly to your phone over your local Wi-Fi.
-- **Interactive Motion Photo Preview**: Test and play back the motion photo right inside the browser.
+- **Brainless Folder Ingestion**: Drop an entire camera roll folder. Live Photos are upgraded to Google Motion Photos; all other photos (PNG, JPEG), videos, and files are bundled alongside seamlessly.
+- **Automatic Live Photo Pairing**: Automatically detects and pairs matching photo and video streams, even across deep subfolders.
+- **Real-Time Progress Bar**: Smooth percentage tracking with live step descriptions for each photo and bundled asset.
+- **Pixel-Ready ZIP Export**: Download a single `.zip` containing your complete library ready to drop onto a Google Pixel or upload to Google Photos.
+- **Mobile QR Code Sharing**: Scan the on-screen QR code with your phone camera to download the entire package directly to your phone over local Wi-Fi.
+- **Interactive Motion Photo Preview**: Test and play back motion photos right inside the browser.
 
 ---
 

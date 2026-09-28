@@ -8,13 +8,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectFolderBtn = document.getElementById('selectFolderBtn');
   
   const statsBar = document.getElementById('statsBar');
-  const photoCountEl = document.getElementById('photoCount');
-  const videoCountEl = document.getElementById('videoCount');
-  const matchCountEl = document.getElementById('matchCount');
+  const livePhotoCountEl = document.getElementById('livePhotoCount');
+  const otherMediaCountEl = document.getElementById('otherMediaCount');
+  const totalCountEl = document.getElementById('totalCount');
   const clearBtn = document.getElementById('clearBtn');
   
   const pairsContainer = document.getElementById('pairsContainer');
   const pairsList = document.getElementById('pairsList');
+  const actionBar = document.getElementById('actionBar');
   const convertBtn = document.getElementById('convertBtn');
   
   const progressCard = document.getElementById('progressCard');
@@ -39,11 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const previewTitle = document.getElementById('previewTitle');
 
   // State
-  let loadedFiles = new Map(); // key (base stem) -> { photo: File, video: File }
-  let matchedPairs = [];       // array of { base, photo: File, video: File, format: 'heic'|'jpeg' }
-  let processedBlobs = [];     // array of { filename, blob, photoBlob, videoBlob }
+  let rawFiles = [];             // all incoming files
+  let matchedPairs = [];         // array of { dir, stem, photo: File, video: File, format: 'heic'|'jpeg', relativePhotoPath }
+  let passThroughFiles = [];     // array of { file: File, relativePath: string, type: 'image'|'video'|'other' }
+  let processedBlobs = [];       // array of { filename, blob, photoBlob, videoBlob }
   let finalZipBlob = null;
-  let qrCodeInstance = null;
   let serverInfo = null;
 
   // Check if local bridge server is reachable
@@ -91,14 +92,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = items[i];
         if (item.webkitGetAsEntry) {
           const entry = item.webkitGetAsEntry();
-          if (entry) await traverseFileTree(entry, files);
+          if (entry) await traverseFileTree(entry, files, "");
         } else {
           const f = item.getAsFile();
-          if (f) files.push(f);
+          if (f) {
+            f.customRelativePath = f.name;
+            files.push(f);
+          }
         }
       }
     } else if (e.dataTransfer.files) {
-      for (const f of e.dataTransfer.files) files.push(f);
+      for (const f of e.dataTransfer.files) {
+        f.customRelativePath = f.name;
+        files.push(f);
+      }
     }
 
     handleIncomingFiles(files);
@@ -106,98 +113,196 @@ document.addEventListener('DOMContentLoaded', () => {
 
   fileInput.addEventListener('change', (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleIncomingFiles(Array.from(e.target.files));
+      const files = Array.from(e.target.files);
+      for (const f of files) f.customRelativePath = f.name;
+      handleIncomingFiles(files);
     }
   });
 
   folderInput.addEventListener('change', (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleIncomingFiles(Array.from(e.target.files));
+      const files = Array.from(e.target.files);
+      for (const f of files) {
+        f.customRelativePath = f.webkitRelativePath || f.name;
+      }
+      handleIncomingFiles(files);
     }
   });
 
   clearBtn.addEventListener('click', () => {
-    loadedFiles.clear();
+    rawFiles = [];
     matchedPairs = [];
+    passThroughFiles = [];
     processedBlobs = [];
     finalZipBlob = null;
     updateUI();
   });
 
-  async function traverseFileTree(item, fileList) {
+  // Recursively read all files in directories (handles batches of > 100 entries)
+  async function traverseFileTree(item, fileList, currentPath) {
+    // Skip hidden files, AppleDouble metadata, and system folders
+    if (item.name.startsWith('.') || item.name.startsWith('._') || item.name === '__MACOSX') {
+      return;
+    }
+
     if (item.isFile) {
       const file = await new Promise(r => item.file(r));
+      file.customRelativePath = currentPath ? `${currentPath}/${file.name}` : file.name;
       fileList.push(file);
     } else if (item.isDirectory) {
       const dirReader = item.createReader();
-      const entries = await new Promise(r => dirReader.readEntries(r));
+      let entries = [];
+      let batch;
+      // Loop until all entries in folder are read
+      do {
+        batch = await new Promise(r => dirReader.readEntries(r));
+        if (batch && batch.length > 0) entries.push(...batch);
+      } while (batch && batch.length > 0);
+
+      const nextPath = currentPath ? `${currentPath}/${item.name}` : item.name;
       for (const entry of entries) {
-        await traverseFileTree(entry, fileList);
+        await traverseFileTree(entry, fileList, nextPath);
       }
     }
   }
 
-  function getBaseStem(name) {
-    const lastDot = name.lastIndexOf('.');
-    if (lastDot === -1) return name.toUpperCase();
-    return name.substring(0, lastDot).toUpperCase();
+  function getPathParts(relativePath) {
+    const norm = relativePath.replace(/\\/g, '/');
+    const lastSlash = norm.lastIndexOf('/');
+    const dir = lastSlash === -1 ? '' : norm.substring(0, lastSlash);
+    const filename = lastSlash === -1 ? norm : norm.substring(lastSlash + 1);
+    
+    const lastDot = filename.lastIndexOf('.');
+    const stem = lastDot === -1 ? filename : filename.substring(0, lastDot);
+    const ext = lastDot === -1 ? '' : filename.substring(lastDot + 1).toLowerCase();
+    
+    return { dir, filename, stem, ext };
   }
 
-  function getExtension(name) {
-    const lastDot = name.lastIndexOf('.');
-    if (lastDot === -1) return '';
-    return name.substring(lastDot + 1).toLowerCase();
+  function isIgnoredSystemFile(parts) {
+    const filename = parts.filename;
+    // Hidden files, AppleDouble resource forks, thumbs.db, etc.
+    if (filename.startsWith('.') || filename.startsWith('._')) return true;
+
+    const lower = filename.toLowerCase();
+    if (lower === 'thumbs.db' || lower === 'desktop.ini' || lower === '.ds_store') return true;
+
+    // Check directory path for hidden directories like .Trash, .git, __MACOSX
+    if (parts.dir) {
+      const segments = parts.dir.split('/');
+      if (segments.some(seg => seg.startsWith('.') || seg === '__MACOSX')) return true;
+    }
+
+    return false;
   }
 
-  function isPhoto(ext) {
+  function isSupportedMedia(ext) {
+    const MEDIA_EXTS = new Set([
+      // Photos & Images
+      'jpg', 'jpeg', 'heic', 'heif', 'png', 'webp', 'gif', 'bmp', 'tiff', 'tif', 'avif',
+      'raw', 'dng', 'cr2', 'nef', 'arw', 'rw2', 'orf', 'pef',
+      // Videos
+      'mov', 'mp4', 'm4v', 'webm', 'mkv', 'avi', '3gp', 'ts'
+    ]);
+    return MEDIA_EXTS.has(ext);
+  }
+
+  function isLivePhotoEligible(ext) {
     return ['heic', 'heif', 'jpg', 'jpeg'].includes(ext);
   }
 
-  function isVideo(ext) {
+  function isLiveVideoEligible(ext) {
     return ['mov', 'mp4'].includes(ext);
   }
 
-  function handleIncomingFiles(fileList) {
-    for (const file of fileList) {
-      const ext = getExtension(file.name);
-      const stem = getBaseStem(file.name);
-
-      if (!loadedFiles.has(stem)) {
-        loadedFiles.set(stem, { photo: null, video: null });
-      }
-
-      const entry = loadedFiles.get(stem);
-      if (isPhoto(ext)) entry.photo = file;
-      else if (isVideo(ext)) entry.video = file;
-    }
-
-    recalculatePairs();
+  function isExistingMotionPhoto(name) {
+    const upper = name.toUpperCase();
+    return upper.includes('.MP.') || upper.includes('_MP.');
   }
 
-  function recalculatePairs() {
+  function handleIncomingFiles(newFiles) {
+    rawFiles.push(...newFiles);
+
+    // Group files by Directory + Base Stem
+    const dirGroups = new Map(); // "dir/stem" (uppercase) -> { photos: [], videos: [], others: [] }
+    const allFilesWithParts = [];
+
+    for (const file of rawFiles) {
+      const relPath = file.customRelativePath || file.webkitRelativePath || file.name;
+      const parts = getPathParts(relPath);
+
+      // Skip hidden files, system junk (.DS_Store, Thumbs.db), and non-media files
+      if (isIgnoredSystemFile(parts) || !isSupportedMedia(parts.ext)) {
+        continue;
+      }
+
+      const isExistingMP = isExistingMotionPhoto(parts.filename);
+      const key = (parts.dir ? `${parts.dir}/` : '') + parts.stem.toUpperCase();
+
+      if (!dirGroups.has(key)) {
+        dirGroups.set(key, { photos: [], videos: [], others: [] });
+      }
+
+      const group = dirGroups.get(key);
+
+      if (!isExistingMP && isLivePhotoEligible(parts.ext)) {
+        group.photos.push({ file, relPath, parts });
+      } else if (!isExistingMP && isLiveVideoEligible(parts.ext)) {
+        group.videos.push({ file, relPath, parts });
+      } else {
+        group.others.push({ file, relPath, parts });
+      }
+
+      allFilesWithParts.push({ file, relPath, parts, key, isExistingMP });
+    }
+
     matchedPairs = [];
-    let photoCount = 0;
-    let videoCount = 0;
+    passThroughFiles = [];
 
-    for (const [stem, entry] of loadedFiles.entries()) {
-      if (entry.photo) photoCount++;
-      if (entry.video) videoCount++;
+    // Form pairs and collect unmatched / pass-through files
+    for (const [key, group] of dirGroups.entries()) {
+      if (group.photos.length > 0 && group.videos.length > 0) {
+        // Matched Live Photo Pair!
+        const photoItem = group.photos[0];
+        const videoItem = group.videos[0];
+        const format = (photoItem.parts.ext === 'heic' || photoItem.parts.ext === 'heif') ? 'heic' : 'jpeg';
 
-      if (entry.photo && entry.video) {
-        const ext = getExtension(entry.photo.name);
-        const format = (ext === 'heic' || ext === 'heif') ? 'heic' : 'jpeg';
         matchedPairs.push({
-          stem,
-          photo: entry.photo,
-          video: entry.video,
-          format
+          dir: photoItem.parts.dir,
+          stem: photoItem.parts.stem,
+          photo: photoItem.file,
+          video: videoItem.file,
+          format,
+          relativePhotoPath: photoItem.relPath
         });
+
+        // If there were extra photos or videos with identical stem in same dir, pass them through
+        for (let i = 1; i < group.photos.length; i++) {
+          passThroughFiles.push({ file: group.photos[i].file, relativePath: group.photos[i].relPath, label: 'Photo' });
+        }
+        for (let i = 1; i < group.videos.length; i++) {
+          passThroughFiles.push({ file: group.videos[i].file, relativePath: group.videos[i].relPath, label: 'Video' });
+        }
+      } else {
+        // No match: Pass everything in this group through unmodified
+        for (const p of group.photos) {
+          passThroughFiles.push({ file: p.file, relativePath: p.relPath, label: 'Photo (Single)' });
+        }
+        for (const v of group.videos) {
+          passThroughFiles.push({ file: v.file, relativePath: v.relPath, label: 'Video (Standalone)' });
+        }
+      }
+
+      // Add other non-live files (PNGs, GIFs, existing Motion Photos, metadata)
+      for (const o of group.others) {
+        passThroughFiles.push({ file: o.file, relativePath: o.relPath, label: o.parts.ext.toUpperCase() || 'File' });
       }
     }
 
-    photoCountEl.textContent = photoCount;
-    videoCountEl.textContent = videoCount;
-    matchCountEl.textContent = matchedPairs.length;
+    // Update Counts
+    livePhotoCountEl.textContent = matchedPairs.length;
+    otherMediaCountEl.textContent = passThroughFiles.length;
+    totalCountEl.textContent = matchedPairs.length + passThroughFiles.length;
 
     renderPairsList();
     updateUI();
@@ -205,33 +310,89 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderPairsList() {
     pairsList.innerHTML = '';
-    matchedPairs.forEach((pair) => {
-      const row = document.createElement('div');
-      row.className = 'pair-row';
-      const photoSize = (pair.photo.size / (1024 * 1024)).toFixed(1);
-      const videoSize = (pair.video.size / (1024 * 1024)).toFixed(1);
 
-      row.innerHTML = `
-        <div class="pair-info">
-          <span class="pair-badge ${pair.format}">${pair.format}</span>
-          <div>
-            <div class="pair-name">${pair.photo.name}</div>
-            <div class="pair-details">Photo: ${photoSize} MB + Video: ${videoSize} MB</div>
+    // 1. Render Matched Live Photos
+    if (matchedPairs.length > 0) {
+      const header = document.createElement('div');
+      header.style.cssText = 'font-size: 12px; font-weight: 700; color: #60a5fa; text-transform: uppercase; margin-top: 4px;';
+      header.textContent = `⚡ Live Photos to Convert (${matchedPairs.length})`;
+      pairsList.appendChild(header);
+
+      matchedPairs.slice(0, 15).forEach((pair) => {
+        const row = document.createElement('div');
+        row.className = 'pair-row';
+        const photoSize = (pair.photo.size / (1024 * 1024)).toFixed(1);
+        const videoSize = (pair.video.size / (1024 * 1024)).toFixed(1);
+
+        row.innerHTML = `
+          <div class="pair-info">
+            <span class="pair-badge ${pair.format}">${pair.format}</span>
+            <div>
+              <div class="pair-name">${pair.relativePhotoPath}</div>
+              <div class="pair-details">Live Photo: ${photoSize} MB + Motion: ${videoSize} MB</div>
+            </div>
           </div>
-        </div>
-        <div class="pair-status">Ready to Mux</div>
-      `;
-      pairsList.appendChild(row);
-    });
+          <div class="pair-status">➔ .MP.${pair.format.toUpperCase()}</div>
+        `;
+        pairsList.appendChild(row);
+      });
+
+      if (matchedPairs.length > 15) {
+        const more = document.createElement('div');
+        more.style.cssText = 'font-size: 12px; color: var(--text-dim); text-align: center; padding: 4px;';
+        more.textContent = `+ ${matchedPairs.length - 15} more Live Photos...`;
+        pairsList.appendChild(more);
+      }
+    }
+
+    // 2. Render Pass-Through Media (PNGs, videos, standalone photos)
+    if (passThroughFiles.length > 0) {
+      const header = document.createElement('div');
+      header.style.cssText = 'font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-top: 10px;';
+      header.textContent = `📁 Other Media to Preserve (${passThroughFiles.length} items: PNG, MOV, etc.)`;
+      pairsList.appendChild(header);
+
+      passThroughFiles.slice(0, 8).forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'pair-row';
+        const sizeMb = (item.file.size / (1024 * 1024)).toFixed(1);
+
+        row.innerHTML = `
+          <div class="pair-info">
+            <span class="pair-badge passthrough">${item.label}</span>
+            <div>
+              <div class="pair-name">${item.relativePath}</div>
+              <div class="pair-details">${sizeMb} MB • Included as-is</div>
+            </div>
+          </div>
+          <div class="pair-status" style="color: var(--text-muted);">Pass-Through</div>
+        `;
+        pairsList.appendChild(row);
+      });
+
+      if (passThroughFiles.length > 8) {
+        const more = document.createElement('div');
+        more.style.cssText = 'font-size: 12px; color: var(--text-dim); text-align: center; padding: 4px;';
+        more.textContent = `+ ${passThroughFiles.length - 8} more media files included...`;
+        pairsList.appendChild(more);
+      }
+    }
   }
 
   function updateUI() {
-    const hasFiles = loadedFiles.size > 0;
-    const hasPairs = matchedPairs.length > 0;
+    const totalItems = matchedPairs.length + passThroughFiles.length;
+    const hasFiles = totalItems > 0;
 
     statsBar.classList.toggle('visible', hasFiles);
-    pairsContainer.classList.toggle('visible', hasPairs);
-    convertBtn.disabled = !hasPairs;
+    if (actionBar) actionBar.classList.toggle('visible', hasFiles);
+    pairsContainer.classList.toggle('visible', hasFiles);
+    convertBtn.disabled = !hasFiles;
+
+    if (matchedPairs.length > 0) {
+      convertBtn.innerHTML = `<span>✨ Convert & Package for Pixel (${totalItems} items)</span>`;
+    } else {
+      convertBtn.innerHTML = `<span>📦 Package ${totalItems} items for Pixel</span>`;
+    }
 
     // Reset results on new changes
     resultsCard.classList.remove('visible');
@@ -329,9 +490,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Blob([finalBytes], { type: 'image/heic' });
   }
 
-  // --- Batch Conversion Trigger ---
+  // --- Brainless Batch Processing & ZIP Packaging Trigger ---
   convertBtn.addEventListener('click', async () => {
-    if (matchedPairs.length === 0) return;
+    const totalPairs = matchedPairs.length;
+    const totalPassThrough = passThroughFiles.length;
+    const totalWork = totalPairs + totalPassThrough;
+    if (totalWork === 0) return;
 
     convertBtn.disabled = true;
     progressCard.classList.add('visible');
@@ -341,66 +505,89 @@ document.addEventListener('DOMContentLoaded', () => {
     processedBlobs = [];
 
     const zip = new JSZip();
-    const total = matchedPairs.length;
 
-    for (let i = 0; i < total; i++) {
+    // 1. Process and Mux all Live Photos
+    for (let i = 0; i < totalPairs; i++) {
       const pair = matchedPairs[i];
-      const percent = Math.round(((i) / total) * 90);
+      const percent = Math.round(((i) / totalWork) * 85);
       progressBar.style.width = `${percent}%`;
       progressPercent.textContent = `${percent}%`;
-      progressDetails.textContent = `Muxing pair ${i + 1} of ${total}: ${pair.photo.name}...`;
+      progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
 
-      // Yield event loop so UI stays snappy
-      await new Promise(r => setTimeout(r, 20));
+      await new Promise(r => setTimeout(r, 15));
 
       const photoBuf = new Uint8Array(await pair.photo.arrayBuffer());
       const videoBuf = new Uint8Array(await pair.video.arrayBuffer());
 
       let muxedBlob;
-      let outputName;
+      const targetExt = pair.format === 'heic' ? 'MP.HEIC' : 'MP.JPG';
+      const outputFilename = `${pair.stem}.${targetExt}`;
+      const zipPath = pair.dir ? `${pair.dir}/${outputFilename}` : outputFilename;
 
       if (pair.format === 'heic') {
         muxedBlob = muxHeic(photoBuf, videoBuf);
-        outputName = `${pair.photo.name.replace(/\.[^/.]+$/, "")}.MP.HEIC`;
       } else {
         muxedBlob = muxJpeg(photoBuf, videoBuf);
-        outputName = `${pair.photo.name.replace(/\.[^/.]+$/, "")}.MP.JPG`;
       }
 
-      zip.file(outputName, muxedBlob);
+      zip.file(zipPath, muxedBlob);
 
       processedBlobs.push({
-        filename: outputName,
+        filename: outputFilename,
+        zipPath,
         blob: muxedBlob,
         photoBlob: new Blob([photoBuf], { type: pair.format === 'heic' ? 'image/heic' : 'image/jpeg' }),
         videoBlob: new Blob([videoBuf], { type: 'video/mp4' })
       });
     }
 
-    progressBar.style.width = '95%';
-    progressPercent.textContent = '95%';
-    progressDetails.textContent = 'Generating final ZIP bundle...';
+    // 2. Add all Pass-Through Media (PNGs, videos, standalone photos)
+    for (let i = 0; i < totalPassThrough; i++) {
+      const item = passThroughFiles[i];
+      const completed = totalPairs + i;
+      const percent = Math.round((completed / totalWork) * 85);
+      progressBar.style.width = `${percent}%`;
+      progressPercent.textContent = `${percent}%`;
+      progressDetails.textContent = `Bundling media ${i + 1} of ${totalPassThrough}: ${item.file.name}...`;
+
+      if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
+
+      const fileBuf = await item.file.arrayBuffer();
+      zip.file(item.relativePath, fileBuf);
+    }
+
+    // 3. Finalize ZIP Package
+    progressBar.style.width = '90%';
+    progressPercent.textContent = '90%';
+    progressDetails.textContent = 'Packing final ZIP archive for Pixel...';
     await new Promise(r => setTimeout(r, 40));
 
     finalZipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
 
     progressBar.style.width = '100%';
     progressPercent.textContent = '100%';
-    progressDetails.textContent = 'Done!';
+    progressDetails.textContent = 'All photos and videos packaged successfully!';
 
     setTimeout(() => {
       progressCard.classList.remove('visible');
-      showResults(finalZipBlob);
+      showResults(finalZipBlob, totalPairs, totalPassThrough);
     }, 400);
   });
 
-  function showResults(zipBlob) {
+  function showResults(zipBlob, numLivePhotos, numOtherMedia) {
     resultsCard.classList.add('visible');
-    const zipSizeMb = (zipBlob.size / (1024 * 1024)).toFixed(2);
-    successMessage.textContent = `🎉 Successfully converted ${processedBlobs.length} Motion Photos (${zipSizeMb} MB)!`;
-    downloadZipBtn.textContent = `📦 Download ZIP (${zipSizeMb} MB)`;
+    const zipSizeMb = (zipBlob.size / (1024 * 1024)).toFixed(1);
+    
+    let summaryText = `🎉 Ready for your Pixel! Converted ${numLivePhotos} Live Photos to Google Motion Photos`;
+    if (numOtherMedia > 0) {
+      summaryText += ` and preserved ${numOtherMedia} other media files`;
+    }
+    summaryText += ` (${zipSizeMb} MB total).`;
 
-    // Setup Preview for the first converted photo
+    successMessage.textContent = summaryText;
+    downloadZipBtn.textContent = `📦 Download Pixel Package (${zipSizeMb} MB)`;
+
+    // Setup Preview for the first converted Motion Photo
     if (processedBlobs.length > 0) {
       setupPreview(processedBlobs[0]);
     }
@@ -411,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!finalZipBlob) return;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(finalZipBlob);
-    a.download = `LivePhotoBridge_MotionPhotos_${Date.now()}.zip`;
+    a.download = `Pixel_MotionPhotos_${Date.now()}.zip`;
     a.click();
   });
 
@@ -430,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/zip',
-          'X-Filename': `LivePhotoBridge_${Date.now()}.zip`
+          'X-Filename': `Pixel_MotionPhotos_${Date.now()}.zip`
         },
         body: finalZipBlob
       });
@@ -446,13 +633,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // Fallback for static browser preview without backend
       const fallbackUrl = window.location.href;
       renderQrCode(fallbackUrl);
-      qrUrlEl.textContent = `${fallbackUrl} (Open on your phone to convert directly)`;
+      qrUrlEl.textContent = `${fallbackUrl} (Open directly on your phone)`;
     }
   });
 
   function renderQrCode(url) {
     qrCodeBox.innerHTML = '';
-    qrCodeInstance = new QRCode(qrCodeBox, {
+    new QRCode(qrCodeBox, {
       text: url,
       width: 200,
       height: 200,
@@ -475,7 +662,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let isMotionPlaying = false;
   function setupPreview(item) {
     previewCard.classList.add('visible');
-    previewTitle.textContent = `Preview: ${item.filename}`;
+    previewTitle.textContent = `Motion Photo Preview: ${item.filename}`;
 
     const photoUrl = URL.createObjectURL(item.photoBlob);
     const videoUrl = URL.createObjectURL(item.videoBlob);
