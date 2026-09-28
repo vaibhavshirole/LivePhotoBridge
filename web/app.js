@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const totalCountEl = document.getElementById('totalCount');
   const clearBtn = document.getElementById('clearBtn');
   
+  const optionsBar = document.getElementById('optionsBar');
+  const convertHeicToggle = document.getElementById('convertHeicToggle');
+  
   const pairsContainer = document.getElementById('pairsContainer');
   const pairsList = document.getElementById('pairsList');
   const actionBar = document.getElementById('actionBar');
@@ -57,6 +60,13 @@ document.addEventListener('DOMContentLoaded', () => {
     .catch(() => {
       console.log('Running in static standalone browser mode (no local bridge server).');
     });
+
+  // Toggle HEIC to JPG conversion mode
+  if (convertHeicToggle) {
+    convertHeicToggle.addEventListener('change', () => {
+      renderPairsList();
+    });
+  }
 
   // Event Handlers for File Selection
   selectFilesBtn.addEventListener('click', (e) => {
@@ -315,25 +325,27 @@ document.addEventListener('DOMContentLoaded', () => {
         // If there were extra photos or videos with identical stem in same dir, pass them through
         for (let i = 1; i < group.photos.length; i++) {
           const item = group.photos[i];
-          passThroughFiles.push({ file: item.file, relativePath: item.relPath, label: 'Photo', isStarred: item.parts.stem.toLowerCase().includes('_starred') });
+          const fmt = (item.parts.ext === 'heic' || item.parts.ext === 'heif') ? 'heic' : (item.parts.ext === 'jpg' || item.parts.ext === 'jpeg') ? 'jpeg' : 'other';
+          passThroughFiles.push({ file: item.file, relativePath: item.relPath, format: fmt, label: 'Photo', isStarred: item.parts.stem.toLowerCase().includes('_starred') });
         }
         for (let i = 1; i < group.videos.length; i++) {
           const item = group.videos[i];
-          passThroughFiles.push({ file: item.file, relativePath: item.relPath, label: 'Video', isStarred: item.parts.stem.toLowerCase().includes('_starred') });
+          passThroughFiles.push({ file: item.file, relativePath: item.relPath, format: 'video', label: 'Video', isStarred: item.parts.stem.toLowerCase().includes('_starred') });
         }
       } else {
         // No match: Pass everything in this group through unmodified
         for (const p of group.photos) {
-          passThroughFiles.push({ file: p.file, relativePath: p.relPath, label: 'Photo (Single)', isStarred: p.parts.stem.toLowerCase().includes('_starred') });
+          const fmt = (p.parts.ext === 'heic' || p.parts.ext === 'heif') ? 'heic' : (p.parts.ext === 'jpg' || p.parts.ext === 'jpeg') ? 'jpeg' : 'other';
+          passThroughFiles.push({ file: p.file, relativePath: p.relPath, format: fmt, label: 'Photo (Single)', isStarred: p.parts.stem.toLowerCase().includes('_starred') });
         }
         for (const v of group.videos) {
-          passThroughFiles.push({ file: v.file, relativePath: v.relPath, label: 'Video (Standalone)', isStarred: v.parts.stem.toLowerCase().includes('_starred') });
+          passThroughFiles.push({ file: v.file, relativePath: v.relPath, format: 'video', label: 'Video (Standalone)', isStarred: v.parts.stem.toLowerCase().includes('_starred') });
         }
       }
 
       // Add other non-live files (PNGs, GIFs, existing Motion Photos, metadata)
       for (const o of group.others) {
-        passThroughFiles.push({ file: o.file, relativePath: o.relPath, label: o.parts.ext.toUpperCase() || 'File', isStarred: o.parts.stem.toLowerCase().includes('_starred') });
+        passThroughFiles.push({ file: o.file, relativePath: o.relPath, format: 'other', label: o.parts.ext.toUpperCase() || 'File', isStarred: o.parts.stem.toLowerCase().includes('_starred') });
       }
     }
 
@@ -348,12 +360,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderPairsList() {
     pairsList.innerHTML = '';
+    const convertHeic = convertHeicToggle ? convertHeicToggle.checked : false;
 
     // 1. Render Matched Live Photos
     if (matchedPairs.length > 0) {
       const header = document.createElement('div');
       header.style.cssText = 'font-size: 12px; font-weight: 700; color: #60a5fa; text-transform: uppercase; margin-top: 4px;';
-      header.textContent = `⚡ Live Photos to Convert (${matchedPairs.length})`;
+      header.textContent = `Live Photos to Bridge (${matchedPairs.length})`;
       pairsList.appendChild(header);
 
       matchedPairs.slice(0, 15).forEach((pair) => {
@@ -362,6 +375,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const photoSize = (pair.photo.size / (1024 * 1024)).toFixed(1);
         const videoSize = (pair.video.size / (1024 * 1024)).toFixed(1);
         const starBadge = pair.isStarred ? '<span class="pair-badge star-badge">⭐ Starred</span>' : '';
+
+        let targetBadge;
+        if (pair.format === 'heic') {
+          targetBadge = convertHeic ? '➔ .MP.JPG <span style="font-size: 11px; opacity: 0.8;"></span>' : '➔ .MP.HEIC';
+        } else {
+          targetBadge = '➔ .MP.JPG';
+        }
 
         row.innerHTML = `
           <div class="pair-info">
@@ -372,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="pair-details">Live Photo: ${photoSize} MB + Motion: ${videoSize} MB</div>
             </div>
           </div>
-          <div class="pair-status">➔ .MP.${pair.format.toUpperCase()}</div>
+          <div class="pair-status">${targetBadge}</div>
         `;
         pairsList.appendChild(row);
       });
@@ -396,6 +416,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = document.createElement('div');
         row.className = 'pair-row';
         const sizeMb = (item.file.size / (1024 * 1024)).toFixed(1);
+        const isStandaloneHeic = item.format === 'heic';
+        const statusText = (isStandaloneHeic && convertHeic) ? '➔ .JPG <span style="font-size: 11px; opacity: 0.8;"></span>' : 'Pass-Through';
+        const statusColor = (isStandaloneHeic && convertHeic) ? 'var(--accent)' : 'var(--text-muted)';
 
         row.innerHTML = `
           <div class="pair-info">
@@ -405,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="pair-details">${sizeMb} MB • Included as-is</div>
             </div>
           </div>
-          <div class="pair-status" style="color: var(--text-muted);">Pass-Through</div>
+          <div class="pair-status" style="color: ${statusColor};">${statusText}</div>
         `;
         pairsList.appendChild(row);
       });
@@ -424,6 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasFiles = totalItems > 0;
 
     statsBar.classList.toggle('visible', hasFiles);
+    if (optionsBar) optionsBar.classList.toggle('visible', hasFiles);
     if (actionBar) actionBar.classList.toggle('visible', hasFiles);
     pairsContainer.classList.toggle('visible', hasFiles);
     convertBtn.disabled = !hasFiles;
@@ -469,6 +493,163 @@ document.addEventListener('DOMContentLoaded', () => {
 </rdf:RDF>
 </x:xmpmeta>
 <?xpacket end="w"?>`;
+  }
+
+  // --- Extract original EXIF payload from HEIC container ---
+  function extractHeicExif(photoBytes) {
+    const view = new DataView(photoBytes.buffer, photoBytes.byteOffset, photoBytes.byteLength);
+    let pos = 0;
+    let meta = null;
+    while (pos < photoBytes.length) {
+      if (pos + 8 > photoBytes.length) break;
+      let sz = view.getUint32(pos);
+      const name = String.fromCharCode(photoBytes[pos+4], photoBytes[pos+5], photoBytes[pos+6], photoBytes[pos+7]);
+      let hlen = 8;
+      if (sz === 1) {
+        sz = view.getUint32(pos + 8) * 4294967296 + view.getUint32(pos + 12);
+        hlen = 16;
+      } else if (sz === 0) sz = photoBytes.length - pos;
+      if (name === "meta") meta = { pos, sz, hlen };
+      pos += sz;
+    }
+    if (!meta) return null;
+
+    const boxStart = meta.pos + meta.hlen + 4;
+    const boxEnd = meta.pos + meta.sz;
+    pos = boxStart;
+    const children = {};
+    while (pos < boxEnd) {
+      if (pos + 8 > boxEnd) break;
+      const sz = view.getUint32(pos);
+      const name = String.fromCharCode(photoBytes[pos+4], photoBytes[pos+5], photoBytes[pos+6], photoBytes[pos+7]);
+      children[name] = { pos, sz };
+      pos += sz;
+    }
+    if (!children["iinf"] || !children["iloc"]) return null;
+
+    const iinf = children["iinf"];
+    const iinfVer = photoBytes[iinf.pos + 8];
+    let ip = iinf.pos + (iinfVer === 0 ? 14 : 16);
+    let exifItemId = null;
+    while (ip < iinf.pos + iinf.sz) {
+      const isz = view.getUint32(ip);
+      if (isz === 0) break;
+      const iver = photoBytes[ip + 8];
+      const iid = (iver < 2) ? view.getUint16(ip + 12) : view.getUint16(ip + 12);
+      const itype = String.fromCharCode(photoBytes[ip+16], photoBytes[ip+17], photoBytes[ip+18], photoBytes[ip+19]);
+      if (itype === "Exif") {
+        exifItemId = iid;
+        break;
+      }
+      ip += isz;
+    }
+    if (exifItemId === null) return null;
+
+    const iloc = children["iloc"];
+    const ilocVer = photoBytes[iloc.pos + 8];
+    const offLen = photoBytes[iloc.pos + 12];
+    const offsetSize = (offLen >> 4) & 0xF;
+    const lengthSize = offLen & 0xF;
+    const baseIdx = photoBytes[iloc.pos + 13];
+    const baseSize = (baseIdx >> 4) & 0xF;
+    let itemCount = (ilocVer < 2) ? view.getUint16(iloc.pos + 14) : view.getUint32(iloc.pos + 14);
+    let p = iloc.pos + (ilocVer < 2 ? 16 : 18);
+
+    for (let i = 0; i < itemCount; i++) {
+      const iid = (ilocVer < 2) ? view.getUint16(p) : view.getUint32(p);
+      p += (ilocVer < 2 ? 2 : 4);
+      if (ilocVer === 1 || ilocVer === 2) p += 2;
+      p += 2;
+      let baseOffset = 0;
+      if (baseSize === 4) { baseOffset = view.getUint32(p); p += 4; }
+      else if (baseSize === 8) {
+        const hi = view.getUint32(p);
+        const lo = view.getUint32(p + 4);
+        baseOffset = hi * 4294967296 + lo;
+        p += 8;
+      } else if (baseSize > 0) p += baseSize;
+
+      const extCount = view.getUint16(p); p += 2;
+      for (let j = 0; j < extCount; j++) {
+        let extOff = 0;
+        if (offsetSize === 4) { extOff = view.getUint32(p); p += 4; }
+        else if (offsetSize === 8) {
+          const hi = view.getUint32(p);
+          const lo = view.getUint32(p + 4);
+          extOff = hi * 4294967296 + lo;
+          p += 8;
+        } else p += offsetSize;
+
+        let extLen = 0;
+        if (lengthSize === 4) { extLen = view.getUint32(p); p += 4; }
+        else if (lengthSize === 8) {
+          const hi = view.getUint32(p);
+          const lo = view.getUint32(p + 4);
+          extLen = hi * 4294967296 + lo;
+          p += 8;
+        } else p += lengthSize;
+
+        if (iid === exifItemId && extLen > 4) {
+          return photoBytes.subarray(extOff + 4, extOff + extLen);
+        }
+      }
+    }
+    return null;
+  }
+
+  // --- Convert HEIC to 100% Quality JPEG with full EXIF preservation ---
+  async function convertHeicToJpegWithExif(heicBlob, heicBytes) {
+    let rawJpgBlob = null;
+
+    // 1. Try native browser decoding first (Safari / iOS) - instant & hardware accelerated
+    try {
+      const bitmap = await createImageBitmap(heicBlob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      rawJpgBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1.0));
+    } catch {
+      // 2. Fallback to heic2any for Chrome / Firefox
+      if (window.heic2any) {
+        let res = await window.heic2any({
+          blob: heicBlob,
+          toType: 'image/jpeg',
+          quality: 1.0
+        });
+        if (Array.isArray(res)) res = res[0];
+        rawJpgBlob = res;
+      } else {
+        throw new Error('HEIC decoding is not supported in this browser.');
+      }
+    }
+
+    // 3. Extract original EXIF payload from the HEIC container
+    const exifPayload = extractHeicExif(heicBytes);
+    if (!exifPayload) {
+      const jpegBuf = new Uint8Array(await rawJpgBlob.arrayBuffer());
+      return { jpegBlob: rawJpgBlob, jpegBuf };
+    }
+
+    const rawJpg = new Uint8Array(await rawJpgBlob.arrayBuffer());
+    const app1Len = 2 + exifPayload.length;
+    const app1Segment = new Uint8Array(2 + app1Len);
+    app1Segment[0] = 0xFF;
+    app1Segment[1] = 0xE1;
+    app1Segment[2] = (app1Len >> 8) & 0xFF;
+    app1Segment[3] = app1Len & 0xFF;
+    app1Segment.set(exifPayload, 4);
+
+    // Insert APP1 right after SOI (offset 2)
+    const finalJpg = new Uint8Array(rawJpg.length + app1Segment.length);
+    finalJpg.set(rawJpg.subarray(0, 2), 0);
+    finalJpg.set(app1Segment, 2);
+    finalJpg.set(rawJpg.subarray(2), 2 + app1Segment.length);
+
+    const jpegBlob = new Blob([finalJpg], { type: 'image/jpeg' });
+    return { jpegBlob, jpegBuf: finalJpg };
   }
 
   function muxJpeg(photoBytes, videoBytes, ptsUs = 750000, isStarred = false) {
@@ -751,7 +932,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       newIlocView.setUint16(wp, it.extents.length); wp += 2;
       for (const ext of it.extents) {
-        const newOff = ext.extOffset + totalShift;
+        // construction_method == 1 means offset is within idat (in meta), not mdat
+        const newOff = (it.cm === 1) ? ext.extOffset : (ext.extOffset + totalShift);
         if (offsetSize === 4) {
           newIlocView.setUint32(wp, newOff); wp += 4;
         } else if (offsetSize === 8) {
@@ -901,6 +1083,7 @@ document.addEventListener('DOMContentLoaded', () => {
     processedBlobs = [];
 
     const zip = new JSZip();
+    const convertHeic = convertHeicToggle ? convertHeicToggle.checked : false;
 
     // 1. Process and Mux all Live Photos
     for (let i = 0; i < totalPairs; i++) {
@@ -908,7 +1091,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const percent = Math.round(((i) / totalWork) * 85);
       progressBar.style.width = `${percent}%`;
       progressPercent.textContent = `${percent}%`;
-      progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
 
       await new Promise(r => setTimeout(r, 15));
 
@@ -916,15 +1098,29 @@ document.addEventListener('DOMContentLoaded', () => {
       const videoBuf = new Uint8Array(await pair.video.arrayBuffer());
 
       let muxedBlob;
-      const targetExt = pair.format === 'heic' ? 'MP.HEIC' : 'MP.JPG';
+      let displayPhotoBlob;
+      let targetExt;
+
+      if (pair.format === 'heic' && convertHeic) {
+        progressDetails.textContent = `Converting HEIC to 100% JPG & Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
+        const { jpegBlob, jpegBuf } = await convertHeicToJpegWithExif(pair.photo, photoBuf);
+        muxedBlob = muxJpeg(jpegBuf, videoBuf, 750000, pair.isStarred);
+        displayPhotoBlob = jpegBlob;
+        targetExt = 'MP.JPG';
+      } else if (pair.format === 'heic') {
+        progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
+        muxedBlob = muxHeic(photoBuf, videoBuf, 750000, pair.isStarred);
+        displayPhotoBlob = new Blob([photoBuf], { type: 'image/heic' });
+        targetExt = 'MP.HEIC';
+      } else {
+        progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
+        muxedBlob = muxJpeg(photoBuf, videoBuf, 750000, pair.isStarred);
+        displayPhotoBlob = new Blob([photoBuf], { type: 'image/jpeg' });
+        targetExt = 'MP.JPG';
+      }
+
       const outputFilename = `${pair.stem}.${targetExt}`;
       const zipPath = pair.dir ? `${pair.dir}/${outputFilename}` : outputFilename;
-
-      if (pair.format === 'heic') {
-        muxedBlob = muxHeic(photoBuf, videoBuf, 750000, pair.isStarred);
-      } else {
-        muxedBlob = muxJpeg(photoBuf, videoBuf, 750000, pair.isStarred);
-      }
 
       zip.file(zipPath, muxedBlob);
 
@@ -932,7 +1128,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filename: outputFilename,
         zipPath,
         blob: muxedBlob,
-        photoBlob: new Blob([photoBuf], { type: pair.format === 'heic' ? 'image/heic' : 'image/jpeg' }),
+        photoBlob: displayPhotoBlob,
         videoBlob: new Blob([videoBuf], { type: 'video/mp4' })
       });
     }
@@ -944,12 +1140,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const percent = Math.round((completed / totalWork) * 85);
       progressBar.style.width = `${percent}%`;
       progressPercent.textContent = `${percent}%`;
-      progressDetails.textContent = `Bundling media ${i + 1} of ${totalPassThrough}: ${item.file.name}...`;
 
       if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
 
       const fileBuf = await item.file.arrayBuffer();
-      zip.file(item.relativePath, fileBuf);
+
+      if (item.format === 'heic' && convertHeic) {
+        progressDetails.textContent = `Converting standalone HEIC ${item.file.name} to 100% JPG...`;
+        const { jpegBlob } = await convertHeicToJpegWithExif(item.file, new Uint8Array(fileBuf));
+        const newRelativePath = item.relativePath.replace(/\.heic$/i, '.JPG').replace(/\.heif$/i, '.JPG');
+        zip.file(newRelativePath, jpegBlob);
+      } else {
+        progressDetails.textContent = `Bundling media ${i + 1} of ${totalPassThrough}: ${item.file.name}...`;
+        zip.file(item.relativePath, fileBuf);
+      }
     }
 
     // 3. Finalize ZIP Package

@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="libs/jszip.min.js"></script>
   <script src="libs/qrcode.min.js"></script>
+  <script src="libs/heic2any.min.js"></script>
 </head>
 <body>
   <div class="app-container">
@@ -63,17 +64,34 @@
       <!-- Detection Stats Bar -->
       <div class="stats-bar" id="statsBar">
         <div class="stat-pills">
-          <div class="stat-pill">⚡ Live Photos: <strong id="livePhotoCount">0</strong></div>
-          <div class="stat-pill">📁 Other Media: <strong id="otherMediaCount">0</strong></div>
-          <div class="stat-pill matched">📦 Total for Pixel: <strong id="totalCount">0</strong></div>
+          <div class="stat-pill">Live Photos: <strong id="livePhotoCount">0</strong></div>
+          <div class="stat-pill">Other Media: <strong id="otherMediaCount">0</strong></div>
+          <div class="stat-pill matched">Total for Pixel: <strong id="totalCount">0</strong></div>
         </div>
         <button type="button" class="dropzone-btn" id="clearBtn">Clear All</button>
+      </div>
+
+      <!-- Conversion Options Toggle (Disabled by default) -->
+      <div class="options-bar" id="optionsBar">
+        <div class="options-info">
+          <div class="options-title">
+            <span>Convert HEIC to JPG</span>
+            <span class="options-badge">Optional</span>
+          </div>
+          <div class="options-desc">
+            Convert Apple HEIC photos to 100% quality JPEG Motion Photos with full EXIF camera, lens & GPS metadata preserved.
+          </div>
+        </div>
+        <label class="switch" title="Convert HEIC to JPG">
+          <input type="checkbox" id="convertHeicToggle">
+          <span class="slider"></span>
+        </label>
       </div>
 
       <!-- Primary Convert & Package Action (Above the fold) -->
       <div class="action-bar" id="actionBar">
         <button type="button" class="btn btn-accent" id="convertBtn" disabled style="width: 100%; font-size: 16px; padding: 16px;">
-          <span>✨ Convert & Package for Pixel</span>
+          <span>Package for Pixel</span>
         </button>
       </div>
 
@@ -145,6 +163,6 @@
     </footer> -->
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2.1"></script>
 </body>
 </html>
