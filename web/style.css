@@ -346,6 +346,11 @@ input[type="file"] {
   color: #cbd5e1;
 }
 
+.pair-badge.star-badge {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
 .pair-name {
   font-weight: 600;
   white-space: nowrap;

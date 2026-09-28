@@ -266,6 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const photoItem = group.photos[0];
         const videoItem = group.videos[0];
         const format = (photoItem.parts.ext === 'heic' || photoItem.parts.ext === 'heif') ? 'heic' : 'jpeg';
+        const isStarred = photoItem.parts.stem.toLowerCase().includes('_starred');
 
         matchedPairs.push({
           dir: photoItem.parts.dir,
@@ -273,29 +274,32 @@ document.addEventListener('DOMContentLoaded', () => {
           photo: photoItem.file,
           video: videoItem.file,
           format,
+          isStarred,
           relativePhotoPath: photoItem.relPath
         });
 
         // If there were extra photos or videos with identical stem in same dir, pass them through
         for (let i = 1; i < group.photos.length; i++) {
-          passThroughFiles.push({ file: group.photos[i].file, relativePath: group.photos[i].relPath, label: 'Photo' });
+          const item = group.photos[i];
+          passThroughFiles.push({ file: item.file, relativePath: item.relPath, label: 'Photo', isStarred: item.parts.stem.toLowerCase().includes('_starred') });
         }
         for (let i = 1; i < group.videos.length; i++) {
-          passThroughFiles.push({ file: group.videos[i].file, relativePath: group.videos[i].relPath, label: 'Video' });
+          const item = group.videos[i];
+          passThroughFiles.push({ file: item.file, relativePath: item.relPath, label: 'Video', isStarred: item.parts.stem.toLowerCase().includes('_starred') });
         }
       } else {
         // No match: Pass everything in this group through unmodified
         for (const p of group.photos) {
-          passThroughFiles.push({ file: p.file, relativePath: p.relPath, label: 'Photo (Single)' });
+          passThroughFiles.push({ file: p.file, relativePath: p.relPath, label: 'Photo (Single)', isStarred: p.parts.stem.toLowerCase().includes('_starred') });
         }
         for (const v of group.videos) {
-          passThroughFiles.push({ file: v.file, relativePath: v.relPath, label: 'Video (Standalone)' });
+          passThroughFiles.push({ file: v.file, relativePath: v.relPath, label: 'Video (Standalone)', isStarred: v.parts.stem.toLowerCase().includes('_starred') });
         }
       }
 
       // Add other non-live files (PNGs, GIFs, existing Motion Photos, metadata)
       for (const o of group.others) {
-        passThroughFiles.push({ file: o.file, relativePath: o.relPath, label: o.parts.ext.toUpperCase() || 'File' });
+        passThroughFiles.push({ file: o.file, relativePath: o.relPath, label: o.parts.ext.toUpperCase() || 'File', isStarred: o.parts.stem.toLowerCase().includes('_starred') });
       }
     }
 
@@ -323,10 +327,12 @@ document.addEventListener('DOMContentLoaded', () => {
         row.className = 'pair-row';
         const photoSize = (pair.photo.size / (1024 * 1024)).toFixed(1);
         const videoSize = (pair.video.size / (1024 * 1024)).toFixed(1);
+        const starBadge = pair.isStarred ? '<span class="pair-badge star-badge">⭐ Starred</span>' : '';
 
         row.innerHTML = `
           <div class="pair-info">
             <span class="pair-badge ${pair.format}">${pair.format}</span>
+            ${starBadge}
             <div>
               <div class="pair-name">${pair.relativePhotoPath}</div>
               <div class="pair-details">Live Photo: ${photoSize} MB + Motion: ${videoSize} MB</div>
@@ -401,26 +407,39 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Core Muxing Engine ---
-  function buildGCameraXmp(videoOffset, ptsUs = 750000) {
+  function buildGCameraXmp(videoOffset, ptsUs = 750000, isStarred = false) {
+    const starXml = isStarred ? `
+  <xmp:Rating>5</xmp:Rating>
+  <xmp:Label>Favorite</xmp:Label>
+  <dc:subject>
+   <rdf:Bag>
+    <rdf:li>Favorite</rdf:li>
+    <rdf:li>Starred</rdf:li>
+   </rdf:Bag>
+  </dc:subject>` : '';
+
     return `<?xpacket begin='﻿' id='W5M0MpCehiHzreSzNTczkc9d'?>
 <x:xmpmeta xmlns:x='adobe:ns:meta/'>
-<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>
- <rdf:Description rdf:about='' xmlns:GCamera='http://ns.google.com/photos/1.0/camera/'>
+<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+         xmlns:xmp='http://ns.adobe.com/xap/1.0/'
+         xmlns:dc='http://purl.org/dc/elements/1.1/'
+         xmlns:GCamera='http://ns.google.com/photos/1.0/camera/'>
+ <rdf:Description rdf:about=''>
   <GCamera:MicroVideo>1</GCamera:MicroVideo>
   <GCamera:MicroVideoOffset>${videoOffset}</GCamera:MicroVideoOffset>
   <GCamera:MicroVideoPresentationTimestampUs>${ptsUs}</GCamera:MicroVideoPresentationTimestampUs>
   <GCamera:MicroVideoVersion>1</GCamera:MicroVideoVersion>
   <GCamera:MotionPhoto>1</GCamera:MotionPhoto>
   <GCamera:MotionPhotoPresentationTimestampUs>${ptsUs}</GCamera:MotionPhotoPresentationTimestampUs>
-  <GCamera:MotionPhotoVersion>1</GCamera:MotionPhotoVersion>
+  <GCamera:MotionPhotoVersion>1</GCamera:MotionPhotoVersion>${starXml}
  </rdf:Description>
 </rdf:RDF>
 </x:xmpmeta>
 <?xpacket end='w'?>`;
   }
 
-  function muxJpeg(photoBytes, videoBytes, ptsUs = 750000) {
-    const xmpXml = buildGCameraXmp(videoBytes.length, ptsUs);
+  function muxJpeg(photoBytes, videoBytes, ptsUs = 750000, isStarred = false) {
+    const xmpXml = buildGCameraXmp(videoBytes.length, ptsUs, isStarred);
     const encoder = new TextEncoder();
     const headerBytes = encoder.encode("http://ns.adobe.com/xap/1.0/\0");
     const xmlBytes = encoder.encode(xmpXml);
@@ -448,8 +467,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Blob([finalBytes], { type: 'image/jpeg' });
   }
 
-  function muxHeic(photoBytes, videoBytes, ptsUs = 750000) {
-    const xmpXml = buildGCameraXmp(videoBytes.length, ptsUs);
+  function muxHeic(photoBytes, videoBytes, ptsUs = 750000, isStarred = false) {
+    const xmpXml = buildGCameraXmp(videoBytes.length, ptsUs, isStarred);
     const encoder = new TextEncoder();
     const xmlBytes = encoder.encode(xmpXml);
 
@@ -525,9 +544,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const zipPath = pair.dir ? `${pair.dir}/${outputFilename}` : outputFilename;
 
       if (pair.format === 'heic') {
-        muxedBlob = muxHeic(photoBuf, videoBuf);
+        muxedBlob = muxHeic(photoBuf, videoBuf, 750000, pair.isStarred);
       } else {
-        muxedBlob = muxJpeg(photoBuf, videoBuf);
+        muxedBlob = muxJpeg(photoBuf, videoBuf, 750000, pair.isStarred);
       }
 
       zip.file(zipPath, muxedBlob);
