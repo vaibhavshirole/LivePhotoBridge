@@ -16,6 +16,15 @@ A fast, zero-cloud web application for transforming Apple Live Photo pairs (`.HE
 
 ---
 
+## Workflow
+
+1. **Export with Apple Shortcut:** Run the [LivePhotoBridge Agent](https://www.icloud.com/shortcuts/734ab60aa0a944749a3354a11d49e556) shortcut on your iPhone to create a folder containing your Live Photos and their video elements.
+2. **Drop into Webpage:** Drop that folder of "demuxed" Apple Live Photos onto the webpage.
+3. **Remux into Motion Photos:** The web app remuxes them into Google's native Motion Photos while preserving all standard media (PNGs, standalone videos).
+4. **Scan QR Code:** Scan the QR code using your Pixel to download them directly onto your device.
+
+---
+
 ## Running the Web App
 
 ### Option 1: Quick Start with Local Server (Recommended for Mobile QR Code Transfer)
