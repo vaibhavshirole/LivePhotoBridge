@@ -13,7 +13,8 @@ public:
 
     bool addXmpData(const std::string& targetPhotoPath,
                     uint64_t videoOffset,
-                    int64_t presentationTimestampUs) override;
+                    int64_t presentationTimestampUs,
+                    bool isStarred = false) override;
 
 private:
     std::string ensureConfigFile();

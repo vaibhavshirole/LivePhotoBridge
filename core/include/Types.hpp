@@ -10,6 +10,7 @@ namespace livephotobridge {
 enum class FileType {
     Photo,
     Video,
+    Media,
     Unknown
 };
 
@@ -18,6 +19,10 @@ enum class FileFormat {
     HEIC,
     MOV,
     MP4,
+    PNG,
+    WEBP,
+    GIF,
+    Other,
     Unknown
 };
 
@@ -29,6 +34,7 @@ struct FileItem {
     FileType type = FileType::Unknown;
     FileFormat format = FileFormat::Unknown;
     uint64_t fileSize = 0;
+    bool isStarred = false;
 };
 
 struct Metadata {
@@ -49,8 +55,10 @@ struct Metadata {
 struct LivePhotoPair {
     FileItem photo;
     FileItem video;
+    FileItem media;
     Metadata metadata;
     bool isPair = false;
+    bool isStarred = false;
 
     bool isValid() const {
         return isPair && !photo.path.empty() && !video.path.empty();
@@ -77,6 +85,7 @@ struct PipelineResult {
     size_t pairsSucceeded = 0;
     size_t unmatchedPhotosMoved = 0;
     size_t unmatchedVideosMoved = 0;
+    size_t passThroughMediaCopied = 0;
     double totalTimeMs = 0.0;
     std::vector<std::string> outputFiles;
     std::vector<std::string> errors;

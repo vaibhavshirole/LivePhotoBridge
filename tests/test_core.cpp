@@ -109,12 +109,90 @@ void testPairMatcherTier2DateStemFallback() {
     std::cout << "  ✓ Passed" << std::endl;
 }
 
+void testJpegModifierStarredXmp() {
+    std::cout << "[TEST] JpegModifier starred Favorite XMP generation..." << std::endl;
+    std::string unstarred = JpegModifier::buildGCameraXmp(1234, 5678, false);
+    assert(unstarred.find("<xmp:Rating>") == std::string::npos);
+    assert(unstarred.find("<xmp:Label>") == std::string::npos);
+
+    std::string starred = JpegModifier::buildGCameraXmp(1234, 5678, true);
+    assert(starred.find("<xmp:Rating>5</xmp:Rating>") != std::string::npos);
+    assert(starred.find("<xmp:Label>Favorite</xmp:Label>") != std::string::npos);
+    assert(starred.find("<rdf:li>Favorite</rdf:li>") != std::string::npos);
+    assert(starred.find("<rdf:li>Starred</rdf:li>") != std::string::npos);
+    std::cout << "  ✓ Passed" << std::endl;
+}
+
+void testFileFiltering() {
+    std::cout << "[TEST] File inspection and junk filtering..." << std::endl;
+    // System junk files
+    FileItem dsStore = PhotoMuxer::inspectFile("/some/dir/.DS_Store");
+    assert(dsStore.type == FileType::Unknown);
+
+    FileItem appleDouble = PhotoMuxer::inspectFile("/some/dir/._IMG_1234.HEIC");
+    assert(appleDouble.type == FileType::Unknown);
+
+    FileItem thumbsDb = PhotoMuxer::inspectFile("/some/dir/Thumbs.db");
+    assert(thumbsDb.type == FileType::Unknown);
+
+    FileItem textFile = PhotoMuxer::inspectFile("/some/dir/notes.txt");
+    assert(textFile.type == FileType::Unknown);
+
+    // Starred photo
+    FileItem starredPhoto = PhotoMuxer::inspectFile("/some/dir/IMG_3971_starred.HEIC");
+    assert(starredPhoto.type == FileType::Photo);
+    assert(starredPhoto.format == FileFormat::HEIC);
+    assert(starredPhoto.isStarred == true);
+
+    // Standalone pass-through media
+    FileItem png = PhotoMuxer::inspectFile("/some/dir/screenshot.png");
+    assert(png.type == FileType::Media);
+    assert(png.format == FileFormat::PNG);
+
+    // Existing Motion Photo
+    FileItem existingMp = PhotoMuxer::inspectFile("/some/dir/IMG_5555.MP.JPG");
+    assert(existingMp.type == FileType::Media);
+
+    std::cout << "  ✓ Passed" << std::endl;
+}
+
+void testPairMatcherStarredAndPassThrough() {
+    std::cout << "[TEST] Pair matching with _starred flag and pass-through media..." << std::endl;
+    PhotoMuxer muxer(nullptr, nullptr, nullptr);
+
+    FileItem photo = PhotoMuxer::inspectFile("/photos/IMG_3971_starred.HEIC");
+    FileItem video = PhotoMuxer::inspectFile("/photos/IMG_3971_starred.MOV");
+    FileItem png = PhotoMuxer::inspectFile("/photos/graphic.png");
+
+    std::vector<FileItem> files = { photo, video, png };
+    std::unordered_map<std::string, Metadata> metaMap;
+    metaMap[photo.path] = Metadata{"STARRED-UUID", "2024:02:01 12:00:00", 0, 1};
+    metaMap[video.path] = Metadata{"STARRED-UUID", "2024:02:01 12:00:00", 0, 1};
+
+    auto pairs = muxer.matchPairs(files, metaMap);
+    assert(pairs.size() == 2); // 1 Live Photo pair + 1 pass-through PNG
+
+    // First pair is valid live photo
+    assert(pairs[0].isValid());
+    assert(pairs[0].isStarred);
+    assert(pairs[0].photo.stem == "IMG_3971_starred");
+
+    // Second is pass-through PNG
+    assert(!pairs[1].isPair);
+    assert(pairs[1].media.filename == "graphic.png");
+
+    std::cout << "  ✓ Passed" << std::endl;
+}
+
 int main() {
     std::cout << "\n=== Running LivePhotoBridge Core Tests ===\n" << std::endl;
     testJpegModifierXmpConstruction();
+    testJpegModifierStarredXmp();
     testJpegModifierApp1Injection();
+    testFileFiltering();
     testPairMatcherTier1Uuid();
     testPairMatcherTier2DateStemFallback();
+    testPairMatcherStarredAndPassThrough();
     std::cout << "\n=== ALL CORE TESTS PASSED! ===\n" << std::endl;
     return 0;
 }

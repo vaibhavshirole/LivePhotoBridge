@@ -5,10 +5,53 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
 namespace livephotobridge {
+
+namespace {
+
+bool isIgnoredSystemPath(const fs::path& p) {
+    std::string filename = p.filename().string();
+    if (filename.empty()) return true;
+    if (filename.starts_with(".") || filename.starts_with("._")) return true;
+
+    std::string lowerName = filename;
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+    if (lowerName == "thumbs.db" || lowerName == "desktop.ini" || lowerName == ".ds_store") {
+        return true;
+    }
+
+    // Check directory components for hidden folders or __MACOSX
+    for (const auto& part : p) {
+        std::string partStr = part.string();
+        if (partStr == "." || partStr == "..") continue;
+        if (partStr.starts_with(".") || partStr == "__MACOSX") {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool isSupportedMediaExtension(const std::string& extLower) {
+    static const std::unordered_set<std::string> s_mediaExts = {
+        // Live Photo eligible
+        "jpg", "jpeg", "heic", "heif",
+        // Live Video eligible
+        "mov", "mp4",
+        // Other photos / images
+        "png", "webp", "gif", "bmp", "tiff", "tif", "avif",
+        "raw", "dng", "cr2", "nef", "arw", "rw2", "orf", "pef",
+        // Other videos
+        "m4v", "webm", "mkv", "avi", "3gp", "ts"
+    };
+    std::string ext = (!extLower.empty() && extLower[0] == '.') ? extLower.substr(1) : extLower;
+    return s_mediaExts.find(ext) != s_mediaExts.end();
+}
+
+} // anonymous namespace
 
 PhotoMuxer::PhotoMuxer(std::shared_ptr<IParser> parser,
                        std::shared_ptr<IModifier> jpegModifier,
@@ -45,6 +88,12 @@ std::string PhotoMuxer::getDatePart(const std::string& createDate) {
 FileItem PhotoMuxer::inspectFile(const std::string& pathStr) {
     FileItem item;
     fs::path p(pathStr);
+    if (isIgnoredSystemPath(p)) {
+        item.type = FileType::Unknown;
+        item.format = FileFormat::Unknown;
+        return item;
+    }
+
     item.path = fs::absolute(p).string();
     item.filename = p.filename().string();
     item.stem = p.stem().string();
@@ -53,16 +102,26 @@ FileItem PhotoMuxer::inspectFile(const std::string& pathStr) {
     std::string extLower = item.extension;
     std::transform(extLower.begin(), extLower.end(), extLower.begin(), ::tolower);
 
-    std::string stemUpper = item.stem;
-    std::transform(stemUpper.begin(), stemUpper.end(), stemUpper.begin(), ::toupper);
-    if (stemUpper.ends_with(".MP") || stemUpper.ends_with("_MP")) {
-        // Skip already-muxed motion photos from being treated as raw inputs
+    if (!isSupportedMediaExtension(extLower)) {
         item.type = FileType::Unknown;
         item.format = FileFormat::Unknown;
         return item;
     }
 
-    if (extLower == ".jpg" || extLower == ".jpeg") {
+    // Check if filename stem contains _starred (case-insensitive)
+    std::string stemLower = item.stem;
+    std::transform(stemLower.begin(), stemLower.end(), stemLower.begin(), ::tolower);
+    item.isStarred = (stemLower.find("_starred") != std::string::npos);
+
+    std::string stemUpper = item.stem;
+    std::transform(stemUpper.begin(), stemUpper.end(), stemUpper.begin(), ::toupper);
+    bool isExistingMP = stemUpper.ends_with(".MP") || stemUpper.ends_with("_MP") ||
+                        stemUpper.find(".MP.") != std::string::npos || stemUpper.find("_MP.") != std::string::npos;
+    if (isExistingMP) {
+        // Existing motion photos pass through without re-muxing
+        item.type = FileType::Media;
+        item.format = FileFormat::Other;
+    } else if (extLower == ".jpg" || extLower == ".jpeg") {
         item.type = FileType::Photo;
         item.format = FileFormat::JPEG;
     } else if (extLower == ".heic" || extLower == ".heif") {
@@ -74,9 +133,18 @@ FileItem PhotoMuxer::inspectFile(const std::string& pathStr) {
     } else if (extLower == ".mp4") {
         item.type = FileType::Video;
         item.format = FileFormat::MP4;
+    } else if (extLower == ".png") {
+        item.type = FileType::Media;
+        item.format = FileFormat::PNG;
+    } else if (extLower == ".webp") {
+        item.type = FileType::Media;
+        item.format = FileFormat::WEBP;
+    } else if (extLower == ".gif") {
+        item.type = FileType::Media;
+        item.format = FileFormat::GIF;
     } else {
-        item.type = FileType::Unknown;
-        item.format = FileFormat::Unknown;
+        item.type = FileType::Media;
+        item.format = FileFormat::Other;
     }
 
     std::error_code ec;
@@ -103,12 +171,23 @@ std::vector<FileItem> PhotoMuxer::scanDirectory(const std::string& dirPath, bool
     };
 
     if (recurse) {
-        for (const auto& entry : fs::recursive_directory_iterator(dir, fs::directory_options::skip_permission_denied)) {
-            scanEntry(entry);
+        for (auto it = fs::recursive_directory_iterator(dir, fs::directory_options::skip_permission_denied);
+             it != fs::recursive_directory_iterator(); ++it) {
+            if (it->is_directory()) {
+                std::string name = it->path().filename().string();
+                if (name.starts_with(".") || name == "__MACOSX") {
+                    it.disable_recursion_pending();
+                    continue;
+                }
+            } else if (it->is_regular_file()) {
+                scanEntry(*it);
+            }
         }
     } else {
         for (const auto& entry : fs::directory_iterator(dir, fs::directory_options::skip_permission_denied)) {
-            scanEntry(entry);
+            if (entry.is_regular_file()) {
+                scanEntry(entry);
+            }
         }
     }
 
@@ -139,6 +218,7 @@ std::vector<LivePhotoPair> PhotoMuxer::matchPairs(
     std::vector<LivePhotoPair> matchedPairs;
     std::vector<FileItem> photos;
     std::vector<FileItem> videos;
+    std::vector<FileItem> otherMedia;
     std::vector<bool> photoMatched;
     std::vector<bool> videoMatched;
 
@@ -147,6 +227,8 @@ std::vector<LivePhotoPair> PhotoMuxer::matchPairs(
             photos.push_back(f);
         } else if (f.type == FileType::Video) {
             videos.push_back(f);
+        } else if (f.type == FileType::Media) {
+            otherMedia.push_back(f);
         }
     }
 
@@ -193,6 +275,7 @@ std::vector<LivePhotoPair> PhotoMuxer::matchPairs(
                 pair.video = videos[vIdx];
                 pair.metadata = getMeta(photos[chosenPIdx]);
                 pair.isPair = true;
+                pair.isStarred = photos[chosenPIdx].isStarred || videos[vIdx].isStarred;
                 matchedPairs.push_back(pair);
             }
         }
@@ -224,6 +307,7 @@ std::vector<LivePhotoPair> PhotoMuxer::matchPairs(
                 pair.video = videos[vIdx];
                 pair.metadata = pMeta;
                 pair.isPair = true;
+                pair.isStarred = photos[pIdx].isStarred || videos[vIdx].isStarred;
                 matchedPairs.push_back(pair);
                 break;
             }
@@ -248,6 +332,7 @@ std::vector<LivePhotoPair> PhotoMuxer::matchPairs(
                 pair.video = videos[vIdx];
                 pair.metadata = getMeta(photos[pIdx]);
                 pair.isPair = true;
+                pair.isStarred = photos[pIdx].isStarred || videos[vIdx].isStarred;
                 matchedPairs.push_back(pair);
                 break;
             }
@@ -261,6 +346,7 @@ std::vector<LivePhotoPair> PhotoMuxer::matchPairs(
             single.photo = photos[pIdx];
             single.metadata = getMeta(photos[pIdx]);
             single.isPair = false;
+            single.isStarred = photos[pIdx].isStarred;
             matchedPairs.push_back(single);
         }
     }
@@ -271,8 +357,18 @@ std::vector<LivePhotoPair> PhotoMuxer::matchPairs(
             single.video = videos[vIdx];
             single.metadata = getMeta(videos[vIdx]);
             single.isPair = false;
+            single.isStarred = videos[vIdx].isStarred;
             matchedPairs.push_back(single);
         }
+    }
+
+    // Collect standalone other media (pass-through)
+    for (const auto& item : otherMedia) {
+        LivePhotoPair single;
+        single.media = item;
+        single.isPair = false;
+        single.isStarred = item.isStarred;
+        matchedPairs.push_back(single);
     }
 
     return matchedPairs;
@@ -284,7 +380,20 @@ bool PhotoMuxer::muxPair(const LivePhotoPair& pair,
                          std::string& outPath) {
     if (!pair.isValid()) return false;
 
-    fs::path outDirectory = outputDir.empty() ? fs::path(pair.photo.path).parent_path() : fs::path(outputDir);
+    fs::path outDirectory;
+    if (outputDir.empty()) {
+        outDirectory = fs::path(pair.photo.path).parent_path();
+    } else if (options.recurse && !options.inputDir.empty()) {
+        std::error_code ec;
+        fs::path relDir = fs::relative(fs::path(pair.photo.path).parent_path(), options.inputDir, ec);
+        if (!ec && !relDir.empty() && relDir != ".") {
+            outDirectory = fs::path(outputDir) / relDir;
+        } else {
+            outDirectory = fs::path(outputDir);
+        }
+    } else {
+        outDirectory = fs::path(outputDir);
+    }
     std::error_code ec;
     fs::create_directories(outDirectory, ec);
 
@@ -329,11 +438,11 @@ bool PhotoMuxer::muxPair(const LivePhotoPair& pair,
 
     if (isJpeg) {
         if (m_jpegModifier) {
-            tagSuccess = m_jpegModifier->addXmpData(targetMotionPhoto.string(), videoSize, presentationTs);
+            tagSuccess = m_jpegModifier->addXmpData(targetMotionPhoto.string(), videoSize, presentationTs, pair.isStarred);
         }
     } else if (isHeic) {
         if (m_heicModifier) {
-            tagSuccess = m_heicModifier->addXmpData(targetMotionPhoto.string(), videoSize, presentationTs);
+            tagSuccess = m_heicModifier->addXmpData(targetMotionPhoto.string(), videoSize, presentationTs, pair.isStarred);
         }
     }
 
@@ -429,16 +538,30 @@ PipelineResult PhotoMuxer::processDirectory(const PipelineOptions& options) {
         }
     }
 
-    // Handle unmatched files (move to output if outputDir specified)
+    // Handle unmatched and pass-through files (move/copy to output if outputDir specified)
     if (!options.outputDir.empty() && fs::absolute(options.outputDir) != fs::absolute(options.inputDir)) {
-        emitProgress("Processing unmatched files...", 95.0f);
+        emitProgress("Processing pass-through and unmatched media...", 95.0f);
         fs::create_directories(options.outputDir);
 
         for (const auto& item : unmatchedItems) {
-            std::string srcPath = !item.photo.path.empty() ? item.photo.path : item.video.path;
+            std::string srcPath = !item.photo.path.empty() ? item.photo.path :
+                                  (!item.video.path.empty() ? item.video.path : item.media.path);
             if (!srcPath.empty() && fs::exists(srcPath)) {
-                fs::path dest = fs::path(options.outputDir) / fs::path(srcPath).filename();
+                fs::path dest;
+                if (options.recurse && !options.inputDir.empty()) {
+                    std::error_code ec;
+                    fs::path rel = fs::relative(srcPath, options.inputDir, ec);
+                    if (!ec && !rel.empty()) {
+                        dest = fs::path(options.outputDir) / rel;
+                    } else {
+                        dest = fs::path(options.outputDir) / fs::path(srcPath).filename();
+                    }
+                } else {
+                    dest = fs::path(options.outputDir) / fs::path(srcPath).filename();
+                }
+
                 std::error_code ec;
+                fs::create_directories(dest.parent_path(), ec);
                 if (options.deleteOriginals) {
                     fs::rename(srcPath, dest, ec);
                 } else {
@@ -446,8 +569,10 @@ PipelineResult PhotoMuxer::processDirectory(const PipelineOptions& options) {
                 }
                 if (!ec) {
                     if (!item.photo.path.empty()) result.unmatchedPhotosMoved++;
-                    else result.unmatchedVideosMoved++;
-                    emitLog("Relocated unmatched file to: " + dest.string());
+                    else if (!item.video.path.empty()) result.unmatchedVideosMoved++;
+                    else result.passThroughMediaCopied++;
+                    result.outputFiles.push_back(dest.string());
+                    emitLog("Preserved media file at: " + dest.string());
                 }
             }
         }
@@ -483,6 +608,7 @@ PipelineResult PhotoMuxer::processIndividualFiles(const PipelineOptions& options
     pair.video = videoItem;
     pair.metadata = photoMeta;
     pair.isPair = true;
+    pair.isStarred = photoItem.isStarred || videoItem.isStarred;
 
     result.pairsFound = 1;
 

@@ -5,20 +5,33 @@
 
 namespace livephotobridge {
 
-std::string JpegModifier::buildGCameraXmp(uint64_t videoOffset, int64_t presentationTimestampUs) {
+std::string JpegModifier::buildGCameraXmp(uint64_t videoOffset, int64_t presentationTimestampUs, bool isStarred) {
     std::ostringstream ss;
     ss << "<?xpacket begin='\xEF\xBB\xBF' id='W5M0MpCehiHzreSzNTczkc9d'?>\n"
        << "<x:xmpmeta xmlns:x='adobe:ns:meta/'>\n"
-       << "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>\n"
-       << " <rdf:Description rdf:about='' xmlns:GCamera='http://ns.google.com/photos/1.0/camera/'>\n"
+       << "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'\n"
+       << "         xmlns:xmp='http://ns.adobe.com/xap/1.0/'\n"
+       << "         xmlns:dc='http://purl.org/dc/elements/1.1/'\n"
+       << "         xmlns:GCamera='http://ns.google.com/photos/1.0/camera/'>\n"
+       << " <rdf:Description rdf:about=''>\n"
        << "  <GCamera:MicroVideo>1</GCamera:MicroVideo>\n"
        << "  <GCamera:MicroVideoOffset>" << videoOffset << "</GCamera:MicroVideoOffset>\n"
        << "  <GCamera:MicroVideoPresentationTimestampUs>" << presentationTimestampUs << "</GCamera:MicroVideoPresentationTimestampUs>\n"
        << "  <GCamera:MicroVideoVersion>1</GCamera:MicroVideoVersion>\n"
        << "  <GCamera:MotionPhoto>1</GCamera:MotionPhoto>\n"
        << "  <GCamera:MotionPhotoPresentationTimestampUs>" << presentationTimestampUs << "</GCamera:MotionPhotoPresentationTimestampUs>\n"
-       << "  <GCamera:MotionPhotoVersion>1</GCamera:MotionPhotoVersion>\n"
-       << " </rdf:Description>\n"
+       << "  <GCamera:MotionPhotoVersion>1</GCamera:MotionPhotoVersion>\n";
+    if (isStarred) {
+        ss << "  <xmp:Rating>5</xmp:Rating>\n"
+           << "  <xmp:Label>Favorite</xmp:Label>\n"
+           << "  <dc:subject>\n"
+           << "   <rdf:Bag>\n"
+           << "    <rdf:li>Favorite</rdf:li>\n"
+           << "    <rdf:li>Starred</rdf:li>\n"
+           << "   </rdf:Bag>\n"
+           << "  </dc:subject>\n";
+    }
+    ss << " </rdf:Description>\n"
        << "</rdf:RDF>\n"
        << "</x:xmpmeta>\n"
        << "<?xpacket end='w'?>";
@@ -27,13 +40,14 @@ std::string JpegModifier::buildGCameraXmp(uint64_t videoOffset, int64_t presenta
 
 bool JpegModifier::injectXmp(std::vector<uint8_t>& jpegBytes,
                              uint64_t videoOffset,
-                             int64_t presentationTimestampUs) {
+                             int64_t presentationTimestampUs,
+                             bool isStarred) {
     // Validate JPEG Start of Image (SOI): 0xFF, 0xD8
     if (jpegBytes.size() < 4 || jpegBytes[0] != 0xFF || jpegBytes[1] != 0xD8) {
         return false;
     }
 
-    std::string xmpXml = buildGCameraXmp(videoOffset, presentationTimestampUs);
+    std::string xmpXml = buildGCameraXmp(videoOffset, presentationTimestampUs, isStarred);
     const std::string xmpHeader = "http://ns.adobe.com/xap/1.0/\0";
     
     // APP1 segment: 0xFF, 0xE1, length (2 bytes), namespace header (29 bytes), XML
@@ -63,7 +77,8 @@ bool JpegModifier::injectXmp(std::vector<uint8_t>& jpegBytes,
 
 bool JpegModifier::addXmpData(const std::string& targetPhotoPath,
                               uint64_t videoOffset,
-                              int64_t presentationTimestampUs) {
+                              int64_t presentationTimestampUs,
+                              bool isStarred) {
     std::ifstream inFile(targetPhotoPath, std::ios::binary | std::ios::ate);
     if (!inFile.is_open()) {
         return false;
@@ -78,7 +93,7 @@ bool JpegModifier::addXmpData(const std::string& targetPhotoPath,
     }
     inFile.close();
 
-    if (!injectXmp(buffer, videoOffset, presentationTimestampUs)) {
+    if (!injectXmp(buffer, videoOffset, presentationTimestampUs, isStarred)) {
         return false;
     }
 

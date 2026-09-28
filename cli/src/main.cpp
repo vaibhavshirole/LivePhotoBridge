@@ -173,6 +173,9 @@ int main(int argc, char* argv[]) {
         if (result.unmatchedVideosMoved > 0) {
             std::cout << "  Unmatched Videos Relocated : " << result.unmatchedVideosMoved << "\n";
         }
+        if (result.passThroughMediaCopied > 0) {
+            std::cout << "  Pass-Through Media Copied  : " << result.passThroughMediaCopied << "\n";
+        }
         std::cout << "  Total Execution Time       : " << std::fixed << std::setprecision(2) << result.totalTimeMs << " ms\n";
         if (result.pairsSucceeded > 0) {
             double avgTime = result.totalTimeMs / static_cast<double>(result.pairsSucceeded);

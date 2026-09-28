@@ -86,9 +86,7 @@ std::string HeicModifier::ensureConfigFile() {
     std::vector<std::string> candidates = {
         "libs/exiftool/google_camera.config",
         "../libs/exiftool/google_camera.config",
-        "../../libs/exiftool/google_camera.config",
-        "photobridge/exiftool/google_camera.config",
-        "../photobridge/exiftool/google_camera.config"
+        "../../libs/exiftool/google_camera.config"
     };
 
     for (const auto& c : candidates) {
@@ -111,7 +109,8 @@ std::string HeicModifier::ensureConfigFile() {
 
 bool HeicModifier::addXmpData(const std::string& targetPhotoPath,
                               uint64_t videoOffset,
-                              int64_t presentationTimestampUs) {
+                              int64_t presentationTimestampUs,
+                              bool isStarred) {
     std::string config = ensureConfigFile();
 
     std::vector<std::string> args = {
@@ -125,9 +124,17 @@ bool HeicModifier::addXmpData(const std::string& targetPhotoPath,
         "-XMP-GCamera:MicroVideoPresentationTimestampUs=" + std::to_string(presentationTimestampUs),
         "-XMP-GCamera:MotionPhoto=1",
         "-XMP-GCamera:MotionPhotoVersion=1",
-        "-XMP-GCamera:MotionPhotoPresentationTimestampUs=" + std::to_string(presentationTimestampUs),
-        targetPhotoPath
+        "-XMP-GCamera:MotionPhotoPresentationTimestampUs=" + std::to_string(presentationTimestampUs)
     };
+
+    if (isStarred) {
+        args.push_back("-XMP-xmp:Rating=5");
+        args.push_back("-XMP-xmp:Label=Favorite");
+        args.push_back("-XMP-dc:Subject=Favorite");
+        args.push_back("-XMP-dc:Subject=Starred");
+    }
+
+    args.push_back(targetPhotoPath);
 
     ProcessResult res = ProcessRunner::run(m_exifToolPath, args);
     return res.success();
