@@ -443,6 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Core Muxing Engine ---
   function buildGCameraXmp(videoOffset, ptsUs = 750000, isStarred = false) {
     const starXml = isStarred ? `
+ <rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <xmp:Rating>5</xmp:Rating>
   <xmp:Label>Favorite</xmp:Label>
   <dc:subject>
@@ -450,26 +451,24 @@ document.addEventListener('DOMContentLoaded', () => {
     <rdf:li>Favorite</rdf:li>
     <rdf:li>Starred</rdf:li>
    </rdf:Bag>
-  </dc:subject>` : '';
+  </dc:subject>
+ </rdf:Description>` : '';
 
-    return `<?xpacket begin='﻿' id='W5M0MpCehiHzreSzNTczkc9d'?>
-<x:xmpmeta xmlns:x='adobe:ns:meta/'>
-<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'
-         xmlns:xmp='http://ns.adobe.com/xap/1.0/'
-         xmlns:dc='http://purl.org/dc/elements/1.1/'
-         xmlns:GCamera='http://ns.google.com/photos/1.0/camera/'>
- <rdf:Description rdf:about=''>
+    return `<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+ <rdf:Description rdf:about="" xmlns:GCamera="http://ns.google.com/photos/1.0/camera/">
   <GCamera:MicroVideo>1</GCamera:MicroVideo>
   <GCamera:MicroVideoOffset>${videoOffset}</GCamera:MicroVideoOffset>
   <GCamera:MicroVideoPresentationTimestampUs>${ptsUs}</GCamera:MicroVideoPresentationTimestampUs>
   <GCamera:MicroVideoVersion>1</GCamera:MicroVideoVersion>
   <GCamera:MotionPhoto>1</GCamera:MotionPhoto>
   <GCamera:MotionPhotoPresentationTimestampUs>${ptsUs}</GCamera:MotionPhotoPresentationTimestampUs>
-  <GCamera:MotionPhotoVersion>1</GCamera:MotionPhotoVersion>${starXml}
- </rdf:Description>
+  <GCamera:MotionPhotoVersion>1</GCamera:MotionPhotoVersion>
+ </rdf:Description>${starXml}
 </rdf:RDF>
 </x:xmpmeta>
-<?xpacket end='w'?>`;
+<?xpacket end="w"?>`;
   }
 
   function muxJpeg(photoBytes, videoBytes, ptsUs = 750000, isStarred = false) {
@@ -504,41 +503,385 @@ document.addEventListener('DOMContentLoaded', () => {
   function muxHeic(photoBytes, videoBytes, ptsUs = 750000, isStarred = false) {
     const xmpXml = buildGCameraXmp(videoBytes.length, ptsUs, isStarred);
     const encoder = new TextEncoder();
-    const xmlBytes = encoder.encode(xmpXml);
+    const xmpBytes = encoder.encode(xmpXml);
 
-    // Standard Adobe XMP UUID for ISOBMFF / MP4 / QuickTime:
-    // BE 7A CF CB 97 A9 42 E8 9C 71 99 94 91 E3 AF AC
-    const xmpUuid = new Uint8Array([
-      0xbe, 0x7a, 0xcf, 0xcb, 0x97, 0xa9, 0x42, 0xe8,
-      0x9c, 0x71, 0x99, 0x94, 0x91, 0xe3, 0xaf, 0xac
-    ]);
+    const view = new DataView(photoBytes.buffer, photoBytes.byteOffset, photoBytes.byteLength);
 
-    const boxLength = 8 + 16 + xmlBytes.length;
-    const uuidBox = new Uint8Array(boxLength);
-    uuidBox[0] = (boxLength >> 24) & 0xFF;
-    uuidBox[1] = (boxLength >> 16) & 0xFF;
-    uuidBox[2] = (boxLength >> 8) & 0xFF;
-    uuidBox[3] = boxLength & 0xFF;
-    uuidBox[4] = 0x75; // 'u'
-    uuidBox[5] = 0x75; // 'u'
-    uuidBox[6] = 0x69; // 'i'
-    uuidBox[7] = 0x64; // 'd'
-    uuidBox.set(xmpUuid, 8);
-    uuidBox.set(xmlBytes, 24);
+    // 1. Parse top-level boxes
+    let pos = 0;
+    let meta = null;
+    let mdat = null;
 
-    // Read ftyp box length to insert right after ftyp
-    const ftypLen = (photoBytes[0] << 24) | (photoBytes[1] << 16) | (photoBytes[2] << 8) | photoBytes[3];
-    const insertPos = (ftypLen > 0 && ftypLen < photoBytes.length) ? ftypLen : 0;
+    while (pos < photoBytes.length) {
+      if (pos + 8 > photoBytes.length) break;
+      let sz = view.getUint32(pos);
+      const name = String.fromCharCode(photoBytes[pos+4], photoBytes[pos+5], photoBytes[pos+6], photoBytes[pos+7]);
+      let hlen = 8;
+      if (sz === 1) {
+        const hi = view.getUint32(pos + 8);
+        const lo = view.getUint32(pos + 12);
+        sz = hi * 4294967296 + lo;
+        hlen = 16;
+      } else if (sz === 0) {
+        sz = photoBytes.length - pos;
+      }
+      if (name === "meta") meta = { pos, sz, hlen };
+      else if (name === "mdat") mdat = { pos, sz, hlen };
+      pos += sz;
+    }
 
-    const taggedPhoto = new Uint8Array(photoBytes.length + uuidBox.length);
-    taggedPhoto.set(photoBytes.subarray(0, insertPos), 0);
-    taggedPhoto.set(uuidBox, insertPos);
-    taggedPhoto.set(photoBytes.subarray(insertPos), insertPos + uuidBox.length);
+    if (!meta || !mdat) {
+      const fallback = new Uint8Array(photoBytes.length + videoBytes.length);
+      fallback.set(photoBytes, 0);
+      fallback.set(videoBytes, photoBytes.length);
+      return new Blob([fallback], { type: 'image/heic' });
+    }
 
-    // Concatenate [Tagged HEIC] + [Video Bytes]
-    const finalBytes = new Uint8Array(taggedPhoto.length + videoBytes.length);
-    finalBytes.set(taggedPhoto, 0);
-    finalBytes.set(videoBytes, taggedPhoto.length);
+    // 2. Parse meta child boxes
+    const boxStart = meta.pos + meta.hlen + 4; // 4 bytes version/flags
+    const boxEnd = meta.pos + meta.sz;
+    pos = boxStart;
+    const children = {};
+
+    while (pos < boxEnd) {
+      if (pos + 8 > boxEnd) break;
+      const sz = view.getUint32(pos);
+      const name = String.fromCharCode(photoBytes[pos+4], photoBytes[pos+5], photoBytes[pos+6], photoBytes[pos+7]);
+      children[name] = { pos, sz };
+      pos += sz;
+    }
+
+    if (!children["pitm"] || !children["iinf"] || !children["iloc"]) {
+      const fallback = new Uint8Array(photoBytes.length + videoBytes.length);
+      fallback.set(photoBytes, 0);
+      fallback.set(videoBytes, photoBytes.length);
+      return new Blob([fallback], { type: 'image/heic' });
+    }
+
+    // 3. Read pitm (primary item ID)
+    const pitm = children["pitm"];
+    const pitmVer = photoBytes[pitm.pos + 8];
+    const primaryItemId = (pitmVer === 0) ? view.getUint16(pitm.pos + 12) : view.getUint32(pitm.pos + 12);
+
+    // 4. Parse iloc items and find max item ID
+    const iloc = children["iloc"];
+    const ilocVer = photoBytes[iloc.pos + 8];
+    const offLenByte = photoBytes[iloc.pos + 12];
+    const offsetSize = (offLenByte >> 4) & 0xF;
+    const lengthSize = offLenByte & 0xF;
+    const baseIdxByte = photoBytes[iloc.pos + 13];
+    const baseOffsetSize = (baseIdxByte >> 4) & 0xF;
+    const indexSize = baseIdxByte & 0xF;
+
+    let itemCount;
+    let p;
+    if (ilocVer < 2) {
+      itemCount = view.getUint16(iloc.pos + 14);
+      p = iloc.pos + 16;
+    } else {
+      itemCount = view.getUint32(iloc.pos + 14);
+      p = iloc.pos + 18;
+    }
+
+    let maxItemId = 0;
+    const ilocItems = [];
+
+    for (let i = 0; i < itemCount; i++) {
+      let iid;
+      if (ilocVer < 2) {
+        iid = view.getUint16(p);
+        p += 2;
+      } else {
+        iid = view.getUint32(p);
+        p += 4;
+      }
+      if (iid > maxItemId) maxItemId = iid;
+
+      let cm = 0;
+      if (ilocVer === 1 || ilocVer === 2) {
+        cm = view.getUint16(p) & 0xF;
+        p += 2;
+      }
+      const drefIdx = view.getUint16(p);
+      p += 2;
+
+      let baseOffset = 0;
+      if (baseOffsetSize === 4) {
+        baseOffset = view.getUint32(p);
+        p += 4;
+      } else if (baseOffsetSize === 8) {
+        const hi = view.getUint32(p);
+        const lo = view.getUint32(p + 4);
+        baseOffset = hi * 4294967296 + lo;
+        p += 8;
+      } else if (baseOffsetSize > 0) {
+        p += baseOffsetSize;
+      }
+
+      const extentCount = view.getUint16(p);
+      p += 2;
+      const extents = [];
+
+      for (let j = 0; j < extentCount; j++) {
+        if ((ilocVer === 1 || ilocVer === 2) && indexSize > 0) {
+          p += indexSize;
+        }
+        let extOffset = 0;
+        if (offsetSize === 4) {
+          extOffset = view.getUint32(p);
+          p += 4;
+        } else if (offsetSize === 8) {
+          const hi = view.getUint32(p);
+          const lo = view.getUint32(p + 4);
+          extOffset = hi * 4294967296 + lo;
+          p += 8;
+        } else {
+          p += offsetSize;
+        }
+
+        let extLen = 0;
+        if (lengthSize === 4) {
+          extLen = view.getUint32(p);
+          p += 4;
+        } else if (lengthSize === 8) {
+          const hi = view.getUint32(p);
+          const lo = view.getUint32(p + 4);
+          extLen = hi * 4294967296 + lo;
+          p += 8;
+        } else {
+          p += lengthSize;
+        }
+        extents.push({ extOffset, extLen });
+      }
+      ilocItems.push({ iid, cm, drefIdx, baseOffset, extents });
+    }
+
+    const newItemId = maxItemId + 1;
+
+    // 5. Build infe box (41 bytes)
+    const mimeType = "application/rdf+xml\0";
+    const infeLen = 12 + 2 + 2 + 4 + 1 + mimeType.length; // 41 bytes
+    const infeBox = new Uint8Array(infeLen);
+    const infeView = new DataView(infeBox.buffer);
+    infeView.setUint32(0, infeLen);
+    infeBox.set([0x69, 0x6e, 0x66, 0x65], 4); // "infe"
+    infeBox[8] = 2; // version 2
+    infeBox[9] = 0; infeBox[10] = 0; infeBox[11] = 1; // flags (hidden item = 1)
+    infeView.setUint16(12, newItemId);
+    infeView.setUint16(14, 0); // item_protection_index = 0
+    infeBox.set([0x6d, 0x69, 0x6d, 0x65], 16); // "mime"
+    infeBox[20] = 0; // null item_name
+    for (let k = 0; k < mimeType.length; k++) {
+      infeBox[21 + k] = mimeType.charCodeAt(k);
+    }
+
+    // 6. Build cdsc box in iref (14 bytes)
+    const cdscLen = 14;
+    const cdscBox = new Uint8Array(cdscLen);
+    const cdscView = new DataView(cdscBox.buffer);
+    cdscView.setUint32(0, cdscLen);
+    cdscBox.set([0x63, 0x64, 0x73, 0x63], 4); // "cdsc"
+    cdscView.setUint16(8, newItemId);
+    cdscView.setUint16(10, 1); // reference_count = 1
+    cdscView.setUint16(12, primaryItemId);
+
+    // 7. Calculate total offset shift
+    const newIlocEntryLen = (ilocVer < 2 ? 2 : 4) + ((ilocVer === 1 || ilocVer === 2) ? 2 : 0) + 2 + baseOffsetSize + 2 + offsetSize + lengthSize;
+    const hasIref = !!children["iref"];
+    let metaGrowth = infeBox.length + cdscBox.length + newIlocEntryLen;
+    if (!hasIref) metaGrowth += 12; // iref header + ver/flags
+
+    // Prepare new mdat header
+    let newMdatHdr;
+    const newMdatPayloadLen = xmpBytes.length + (mdat.sz - mdat.hlen);
+    if (mdat.hlen === 8 && (newMdatPayloadLen + 8) < 4294967296) {
+      newMdatHdr = new Uint8Array(8);
+      const dv = new DataView(newMdatHdr.buffer);
+      dv.setUint32(0, newMdatPayloadLen + 8);
+      newMdatHdr.set([0x6d, 0x64, 0x61, 0x74], 4);
+    } else {
+      newMdatHdr = new Uint8Array(16);
+      const dv = new DataView(newMdatHdr.buffer);
+      dv.setUint32(0, 1);
+      newMdatHdr.set([0x6d, 0x64, 0x61, 0x74], 4);
+      const totalMdatSize = newMdatPayloadLen + 16;
+      const hi = Math.floor(totalMdatSize / 4294967296);
+      const lo = totalMdatSize >>> 0;
+      dv.setUint32(8, hi);
+      dv.setUint32(12, lo);
+    }
+
+    const mdatHdrGrowth = newMdatHdr.length - mdat.hlen;
+    const totalShift = metaGrowth + mdatHdrGrowth + xmpBytes.length;
+
+    // 8. Rebuild iloc
+    const ilocHeaderLen = (ilocVer < 2 ? 16 : 18);
+    const estIlocLen = iloc.sz + newIlocEntryLen;
+    const newIlocBuf = new Uint8Array(estIlocLen + 100);
+    const newIlocView = new DataView(newIlocBuf.buffer);
+
+    newIlocBuf.set(photoBytes.subarray(iloc.pos, iloc.pos + 12), 0);
+    newIlocBuf[12] = offLenByte;
+    newIlocBuf[13] = baseIdxByte;
+    if (ilocVer < 2) {
+      newIlocView.setUint16(14, itemCount + 1);
+    } else {
+      newIlocView.setUint32(14, itemCount + 1);
+    }
+
+    let wp = ilocHeaderLen;
+    for (const it of ilocItems) {
+      if (ilocVer < 2) {
+        newIlocView.setUint16(wp, it.iid); wp += 2;
+      } else {
+        newIlocView.setUint32(wp, it.iid); wp += 4;
+      }
+      if (ilocVer === 1 || ilocVer === 2) {
+        newIlocView.setUint16(wp, it.cm); wp += 2;
+      }
+      newIlocView.setUint16(wp, it.drefIdx); wp += 2;
+      if (baseOffsetSize === 4) {
+        newIlocView.setUint32(wp, it.baseOffset); wp += 4;
+      } else if (baseOffsetSize === 8) {
+        const hi = Math.floor(it.baseOffset / 4294967296);
+        const lo = it.baseOffset >>> 0;
+        newIlocView.setUint32(wp, hi);
+        newIlocView.setUint32(wp + 4, lo);
+        wp += 8;
+      }
+      newIlocView.setUint16(wp, it.extents.length); wp += 2;
+      for (const ext of it.extents) {
+        const newOff = ext.extOffset + totalShift;
+        if (offsetSize === 4) {
+          newIlocView.setUint32(wp, newOff); wp += 4;
+        } else if (offsetSize === 8) {
+          const hi = Math.floor(newOff / 4294967296);
+          const lo = newOff >>> 0;
+          newIlocView.setUint32(wp, hi);
+          newIlocView.setUint32(wp + 4, lo);
+          wp += 8;
+        }
+        if (lengthSize === 4) {
+          newIlocView.setUint32(wp, ext.extLen); wp += 4;
+        } else if (lengthSize === 8) {
+          const hi = Math.floor(ext.extLen / 4294967296);
+          const lo = ext.extLen >>> 0;
+          newIlocView.setUint32(wp, hi);
+          newIlocView.setUint32(wp + 4, lo);
+          wp += 8;
+        }
+      }
+    }
+
+    // Add XMP item in iloc
+    const newXmpOffset = (mdat.pos + metaGrowth) + newMdatHdr.length;
+    if (ilocVer < 2) {
+      newIlocView.setUint16(wp, newItemId); wp += 2;
+    } else {
+      newIlocView.setUint32(wp, newItemId); wp += 4;
+    }
+    if (ilocVer === 1 || ilocVer === 2) {
+      newIlocView.setUint16(wp, 0); wp += 2;
+    }
+    newIlocView.setUint16(wp, 0); wp += 2; // dref_idx
+    if (baseOffsetSize > 0) {
+      wp += baseOffsetSize; // base_offset 0
+    }
+    newIlocView.setUint16(wp, 1); wp += 2; // extent_count 1
+    if (offsetSize === 4) {
+      newIlocView.setUint32(wp, newXmpOffset); wp += 4;
+    } else if (offsetSize === 8) {
+      const hi = Math.floor(newXmpOffset / 4294967296);
+      const lo = newXmpOffset >>> 0;
+      newIlocView.setUint32(wp, hi);
+      newIlocView.setUint32(wp + 4, lo);
+      wp += 8;
+    }
+    if (lengthSize === 4) {
+      newIlocView.setUint32(wp, xmpBytes.length); wp += 4;
+    } else if (lengthSize === 8) {
+      const hi = Math.floor(xmpBytes.length / 4294967296);
+      const lo = xmpBytes.length >>> 0;
+      newIlocView.setUint32(wp, hi);
+      newIlocView.setUint32(wp + 4, lo);
+      wp += 8;
+    }
+
+    newIlocView.setUint32(0, wp); // set actual iloc size
+    const finalIloc = newIlocBuf.subarray(0, wp);
+
+    // 9. Rebuild iinf
+    const iinf = children["iinf"];
+    const iinfVer = photoBytes[iinf.pos + 8];
+    const newIinf = new Uint8Array(iinf.sz + infeBox.length);
+    newIinf.set(photoBytes.subarray(iinf.pos, iinf.pos + iinf.sz), 0);
+    const newIinfView = new DataView(newIinf.buffer);
+    newIinfView.setUint32(0, newIinf.length);
+    if (iinfVer === 0) {
+      const oc = view.getUint16(iinf.pos + 12);
+      newIinfView.setUint16(12, oc + 1);
+    } else {
+      const oc = view.getUint32(iinf.pos + 12);
+      newIinfView.setUint32(12, oc + 1);
+    }
+    newIinf.set(infeBox, iinf.sz);
+
+    // 10. Rebuild iref
+    let finalIref;
+    if (hasIref) {
+      const iref = children["iref"];
+      finalIref = new Uint8Array(iref.sz + cdscBox.length);
+      finalIref.set(photoBytes.subarray(iref.pos, iref.pos + iref.sz), 0);
+      const irefView = new DataView(finalIref.buffer);
+      irefView.setUint32(0, finalIref.length);
+      finalIref.set(cdscBox, iref.sz);
+    } else {
+      finalIref = new Uint8Array(12 + cdscBox.length);
+      const irefView = new DataView(finalIref.buffer);
+      irefView.setUint32(0, finalIref.length);
+      finalIref.set([0x69, 0x72, 0x65, 0x66], 4); // "iref"
+      finalIref.set(cdscBox, 12);
+    }
+
+    // 11. Assemble new meta
+    const metaChildParts = [];
+    for (const name of Object.keys(children)) {
+      const ch = children[name];
+      if (name === "iinf") metaChildParts.push(newIinf);
+      else if (name === "iref") metaChildParts.push(finalIref);
+      else if (name === "iloc") metaChildParts.push(finalIloc);
+      else metaChildParts.push(photoBytes.subarray(ch.pos, ch.pos + ch.sz));
+    }
+    if (!hasIref) {
+      metaChildParts.push(finalIref);
+    }
+
+    let totalMetaChildrenLen = 0;
+    for (const part of metaChildParts) totalMetaChildrenLen += part.length;
+
+    const newMetaHeaderLen = 12; // 4 size + 4 "meta" + 4 ver/flags
+    const newMeta = new Uint8Array(newMetaHeaderLen + totalMetaChildrenLen);
+    const newMetaView = new DataView(newMeta.buffer);
+    newMetaView.setUint32(0, newMeta.length);
+    newMeta.set([0x6d, 0x65, 0x74, 0x61], 4); // "meta"
+    let mp = newMetaHeaderLen;
+    for (const part of metaChildParts) {
+      newMeta.set(part, mp);
+      mp += part.length;
+    }
+
+    const origMdatPayload = photoBytes.subarray(mdat.pos + mdat.hlen, mdat.pos + mdat.sz);
+
+    // 12. Assemble final bytes
+    const finalLen = meta.pos + newMeta.length + newMdatHdr.length + xmpBytes.length + origMdatPayload.length + videoBytes.length;
+    const finalBytes = new Uint8Array(finalLen);
+    let fp = 0;
+    finalBytes.set(photoBytes.subarray(0, meta.pos), fp); fp += meta.pos;
+    finalBytes.set(newMeta, fp); fp += newMeta.length;
+    finalBytes.set(newMdatHdr, fp); fp += newMdatHdr.length;
+    finalBytes.set(xmpBytes, fp); fp += xmpBytes.length;
+    finalBytes.set(origMdatPayload, fp); fp += origMdatPayload.length;
+    finalBytes.set(videoBytes, fp);
 
     return new Blob([finalBytes], { type: 'image/heic' });
   }
