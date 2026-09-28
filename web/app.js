@@ -64,10 +64,42 @@ document.addEventListener('DOMContentLoaded', () => {
     fileInput.click();
   });
 
-  selectFolderBtn.addEventListener('click', (e) => {
+  selectFolderBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
+    // Modern File System Access API (Chrome, Edge, Opera)
+    if (window.showDirectoryPicker) {
+      try {
+        const dirHandle = await window.showDirectoryPicker();
+        const files = [];
+        await readDirectoryHandle(dirHandle, files, dirHandle.name);
+        if (files.length > 0) {
+          handleIncomingFiles(files);
+          return;
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return; // User cancelled dialog
+        console.warn('showDirectoryPicker fallback to input:', err);
+      }
+    }
+    // Safari / Firefox fallback
     folderInput.click();
   });
+
+  async function readDirectoryHandle(dirHandle, fileList, currentPath) {
+    for await (const entry of dirHandle.values()) {
+      if (entry.name.startsWith('.') || entry.name.startsWith('._') || entry.name === '__MACOSX') {
+        continue;
+      }
+      if (entry.kind === 'file') {
+        const file = await entry.getFile();
+        file.customRelativePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+        fileList.push(file);
+      } else if (entry.kind === 'directory') {
+        const nextPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        await readDirectoryHandle(entry, fileList, nextPath);
+      }
+    }
+  }
 
   dropzone.addEventListener('click', () => fileInput.click());
 
@@ -116,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const files = Array.from(e.target.files);
       for (const f of files) f.customRelativePath = f.name;
       handleIncomingFiles(files);
+      fileInput.value = '';
     }
   });
 
@@ -126,6 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         f.customRelativePath = f.webkitRelativePath || f.name;
       }
       handleIncomingFiles(files);
+      folderInput.value = '';
     }
   });
 
