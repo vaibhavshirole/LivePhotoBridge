@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="libs/jszip.min.js"></script>
   <script src="libs/qrcode.min.js"></script>
+  <script src="libs/peerjs.min.js"></script>
   <!-- <script src="libs/heic2any.min.js"></script> -->
 </head>
 <body>
@@ -22,7 +23,7 @@
     </header>
 
     <!-- How It Works Instructions -->
-    <div class="steps-card">
+    <div class="steps-card" id="stepsCard">
       <div class="step-item">
         <div class="step-num">1</div>
         <div class="step-text">Use <a href="https://www.icloud.com/shortcuts/734ab60aa0a944749a3354a11d49e556" target="_blank" rel="noopener noreferrer" class="shortcut-link">LivePhotoBridge Agent ↗</a> Apple Shortcut to create a folder of photos and their video element on your iPhone</div>
@@ -41,8 +42,34 @@
       </div>
     </div>
 
+    <!-- Receiver Mode Card (Shown on mobile when QR code is scanned) -->
+    <div class="card" id="receiverCard" style="display: none; padding: 32px 24px; text-align: center;">
+      <div style="font-size: 52px; margin-bottom: 16px;">📦 ➔ 📱</div>
+      <h2 id="receiverTitle" style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">Connecting to your computer...</h2>
+      <p id="receiverStatus" style="font-size: 14px; color: var(--text-dim); margin-bottom: 24px; line-height: 1.5; max-width: 440px; margin-left: auto; margin-right: auto;">Establishing a direct secure connection to transfer your Google Motion Photos package.</p>
+      
+      <div class="progress-track" id="receiverProgressTrack" style="margin: 20px auto; max-width: 440px;">
+        <div class="progress-bar" id="receiverProgressBar" style="width: 0%;"></div>
+      </div>
+      <div id="receiverProgressText" style="font-size: 13px; color: #60a5fa; font-weight: 600; margin-bottom: 20px;">0%</div>
+
+      <div id="receiverSuccessActions" style="display: none; margin-top: 24px; max-width: 440px; margin-left: auto; margin-right: auto;">
+        <button type="button" class="btn btn-accent" id="receiverDownloadBtn" style="width: 100%; padding: 16px; font-size: 16px;">
+          <span>📥 Download Pixel Package (.zip)</span>
+        </button>
+        <div style="margin-top: 14px; font-size: 13px; color: var(--text-dim); line-height: 1.5;">
+          💡 <strong>Pixel Tip:</strong> Once downloaded, open your Files app to extract the photos, or view them directly in Google Photos.
+        </div>
+      </div>
+
+      <div id="receiverErrorActions" style="display: none; margin-top: 24px;">
+        <p style="color: #ef4444; font-size: 14px; margin-bottom: 14px;">Connection could not be established. Ensure the computer tab is still open.</p>
+        <button type="button" class="dropzone-btn" onclick="window.location.reload()">Retry Connection</button>
+      </div>
+    </div>
+
     <!-- Drop Zone Section -->
-    <div class="card">
+    <div class="card" id="mainCard">
       <div class="dropzone" id="dropzone">
         <div class="dropzone-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -140,6 +167,7 @@
           <div class="qr-url" id="qrUrl">http://...</div>
           <button type="button" class="dropzone-btn" id="copyLinkBtn">📋 Copy Link</button>
         </div>
+        <div id="qrTransferStatus" style="font-size: 13px; color: #60a5fa; font-weight: 500; min-height: 20px;"></div>
       </div>
     </div>
 
