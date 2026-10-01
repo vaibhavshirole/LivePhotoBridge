@@ -49,8 +49,8 @@ const server = http.createServer((req, res) => {
 
   // CORS headers for local network testing
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Filename');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -99,7 +99,7 @@ const server = http.createServer((req, res) => {
   }
 
   // API: Download Bundle (Scanned via mobile QR code)
-  if (req.method === 'GET' && pathname.startsWith('/download/')) {
+  if ((req.method === 'GET' || req.method === 'HEAD') && pathname.startsWith('/download/')) {
     const id = pathname.replace('/download/', '').trim();
     const bundle = bundles.get(id);
 
@@ -125,6 +125,12 @@ const server = http.createServer((req, res) => {
       'Content-Length': bundle.buffer.length,
       'Content-Disposition': `attachment; filename="${bundle.filename}"`
     });
+
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+
     res.end(bundle.buffer);
     return;
   }

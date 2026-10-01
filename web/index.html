@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="style.css">
   <script src="libs/jszip.min.js"></script>
   <script src="libs/qrcode.min.js"></script>
-  <script src="libs/peerjs.min.js"></script>
   <!-- <script src="libs/heic2any.min.js"></script> -->
 </head>
 <body>
@@ -39,32 +38,6 @@
       <div class="step-item">
         <div class="step-num">4</div>
         <div class="step-text">Scan <strong>QR code</strong> using your Pixel to get them directly onto there</div>
-      </div>
-    </div>
-
-    <!-- Receiver Mode Card (Shown on mobile when QR code is scanned) -->
-    <div class="card" id="receiverCard" style="display: none; padding: 32px 24px; text-align: center;">
-      <div style="font-size: 52px; margin-bottom: 16px;">📦 ➔ 📱</div>
-      <h2 id="receiverTitle" style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">Connecting to your computer...</h2>
-      <p id="receiverStatus" style="font-size: 14px; color: var(--text-dim); margin-bottom: 24px; line-height: 1.5; max-width: 440px; margin-left: auto; margin-right: auto;">Establishing a direct secure connection to transfer your Google Motion Photos package.</p>
-      
-      <div class="progress-track" id="receiverProgressTrack" style="margin: 20px auto; max-width: 440px;">
-        <div class="progress-bar" id="receiverProgressBar" style="width: 0%;"></div>
-      </div>
-      <div id="receiverProgressText" style="font-size: 13px; color: #60a5fa; font-weight: 600; margin-bottom: 20px;">0%</div>
-
-      <div id="receiverSuccessActions" style="display: none; margin-top: 24px; max-width: 440px; margin-left: auto; margin-right: auto;">
-        <button type="button" class="btn btn-accent" id="receiverDownloadBtn" style="width: 100%; padding: 16px; font-size: 16px;">
-          <span>📥 Download Pixel Package (.zip)</span>
-        </button>
-        <div style="margin-top: 14px; font-size: 13px; color: var(--text-dim); line-height: 1.5;">
-          💡 <strong>Pixel Tip:</strong> Once downloaded, open your Files app to extract the photos, or view them directly in Google Photos.
-        </div>
-      </div>
-
-      <div id="receiverErrorActions" style="display: none; margin-top: 24px;">
-        <p style="color: #ef4444; font-size: 14px; margin-bottom: 14px;">Connection could not be established. Ensure the computer tab is still open.</p>
-        <button type="button" class="dropzone-btn" onclick="window.location.reload()">Retry Connection</button>
       </div>
     </div>
 
@@ -161,7 +134,7 @@
       <!-- QR Code Mobile Sharing Drawer -->
       <div class="qr-section" id="qrSection">
         <div class="qr-title">Scan to Download on Mobile Device</div>
-        <div class="qr-subtitle">Scan this QR code with your iPhone or Android camera to instantly download the ZIP bundle onto your mobile device.</div>
+        <div class="qr-subtitle">Connect your phone to the same Wi-Fi network and scan this QR code to download the package directly to your device.</div>
         <div class="qr-box" id="qrCodeBox"></div>
         <div style="display: flex; align-items: center; gap: 8px; max-width: 100%;">
           <div class="qr-url" id="qrUrl">http://...</div>

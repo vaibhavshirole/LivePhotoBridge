@@ -1,38 +1,5 @@
 // LivePhotoBridge Web — Client-side Muxing & Sharing Engine
-
-// Reliable STUN + TURN relay configuration for WebRTC P2P mobile transfer
-const PEER_CONFIG = {
-  debug: 1,
-  config: {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun.cloudflare.com:3478' },
-      {
-        urls: [
-          'turn:openrelay.metered.ca:80',
-          'turn:openrelay.metered.ca:443',
-          'turn:openrelay.metered.ca:443?transport=tcp'
-        ],
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
-      }
-    ],
-    iceCandidatePoolSize: 10
-  }
-};
-
 document.addEventListener('DOMContentLoaded', () => {
-  // Mobile Receiver Mode Check (When scanned via QR Code)
-  const urlParams = new URLSearchParams(window.location.search);
-  const receivePeerId = urlParams.get('receive') || (window.location.hash.startsWith('#receive=') ? window.location.hash.replace('#receive=', '') : null);
-
-  if (receivePeerId) {
-    initReceiverMode(receivePeerId);
-    return;
-  }
-
   // Elements
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
@@ -83,7 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let processedBlobs = [];       // array of { filename, blob, photoBlob, videoBlob }
   let finalZipBlob = null;
   let serverInfo = null;
-  let activeSenderPeer = null;
 
   // Check if local bridge server is reachable
   fetch('/api/network-ip')
@@ -1237,7 +1203,7 @@ document.addEventListener('DOMContentLoaded', () => {
     a.click();
   });
 
-  // --- QR Code Mobile Sharing ---
+  // --- Direct Wi-Fi Download via QR Code ---
   showQrBtn.addEventListener('click', async () => {
     if (!finalZipBlob) return;
 
@@ -1246,166 +1212,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     qrCodeBox.innerHTML = '<span style="color:#64748b; font-size:12px;">Generating QR Code...</span>';
     if (qrTransferStatus) {
-      qrTransferStatus.textContent = 'Preparing secure transfer...';
+      qrTransferStatus.textContent = 'Preparing Wi-Fi download link...';
     }
 
-    // 1. If local Node server is running on Wi-Fi, upload bundle
-    let serverUploadSuccess = false;
-    if (serverInfo && serverInfo.url) {
-      try {
-        const response = await fetch('/api/bundle', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/zip',
-            'X-Filename': `Pixel_MotionPhotos_${Date.now()}.zip`
-          },
-          body: finalZipBlob
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          renderQrCode(data.downloadUrl);
-          qrUrlEl.textContent = data.downloadUrl;
-          if (qrTransferStatus) {
-            qrTransferStatus.textContent = '📶 Local Wi-Fi transfer ready. Scan with your Pixel camera to download.';
-          }
-          serverUploadSuccess = true;
-        }
-      } catch (e) {
-        console.warn('Local bridge server upload failed, falling back to P2P:', e);
-      }
-    }
-
-    if (serverUploadSuccess) return;
-
-    // 2. Direct WebRTC P2P Transfer (Zero backend, works on GitHub Pages & static hosting)
     try {
-      if (typeof Peer === 'undefined') {
-        throw new Error('PeerJS not loaded');
-      }
+      const response = await fetch('/api/bundle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/zip',
+          'X-Filename': `Pixel_MotionPhotos_${Date.now()}.zip`
+        },
+        body: finalZipBlob
+      });
 
-      if (activeSenderPeer && !activeSenderPeer.destroyed) {
-        activeSenderPeer.destroy();
-      }
-
-      if (qrTransferStatus) {
-        qrTransferStatus.textContent = 'Connecting to transfer network...';
-      }
-
-      const senderPeer = new Peer(PEER_CONFIG);
-      activeSenderPeer = senderPeer;
-
-      senderPeer.on('open', (peerId) => {
-        const currentUrl = new URL(window.location.href);
-        currentUrl.searchParams.set('receive', peerId);
-        currentUrl.hash = '';
-        const receiveUrl = currentUrl.toString();
-
-        renderQrCode(receiveUrl);
-        qrUrlEl.textContent = receiveUrl;
+      if (response.ok) {
+        const data = await response.json();
+        renderQrCode(data.downloadUrl);
+        qrUrlEl.textContent = data.downloadUrl;
         if (qrTransferStatus) {
-          qrTransferStatus.textContent = 'Direct transfer ready. Scan with your Pixel camera to download.';
+          qrTransferStatus.innerHTML = '<span style="color: #34d399; font-weight: 500;">📶 Connect your phone to the same Wi-Fi and scan to download!</span>';
         }
-      });
-
-      senderPeer.on('connection', (conn) => {
-        console.log('Incoming connection from mobile device:', conn.peer);
-        if (qrTransferStatus) {
-          qrTransferStatus.textContent = '📲 Phone connected! Initializing transfer...';
-        }
-
-        const handleConnected = async () => {
-          console.log('WebRTC DataChannel opened, starting blob transfer...');
-          if (qrTransferStatus) {
-            qrTransferStatus.textContent = '📲 Phone connected! Sending Motion Photos package...';
-          }
-          try {
-            await sendBlobOverPeerConnection(conn, finalZipBlob, `Pixel_MotionPhotos_${Date.now()}.zip`, (sent, total) => {
-              const pct = Math.round((sent / total) * 100);
-              if (qrTransferStatus) {
-                qrTransferStatus.textContent = `🚀 Sending to Pixel: ${pct}% (${(sent / (1024 * 1024)).toFixed(1)} / ${(total / (1024 * 1024)).toFixed(1)} MB)`;
-              }
-            });
-            if (qrTransferStatus) {
-              qrTransferStatus.innerHTML = '<span style="color: #34d399; font-weight: 600;">✅ Package successfully sent to your Pixel!</span>';
-            }
-          } catch (err) {
-            console.error('Transfer error:', err);
-            if (qrTransferStatus) {
-              qrTransferStatus.innerHTML = '<span style="color: #ef4444;">Transfer interrupted. Please keep both screens open and try again.</span>';
-            }
-          }
-        };
-
-        if (conn.open) {
-          handleConnected();
-        } else {
-          conn.on('open', handleConnected);
-        }
-      });
-
-      senderPeer.on('disconnected', () => {
-        console.warn('Sender peer disconnected from server, attempting reconnect...');
-        senderPeer.reconnect();
-      });
-
-      senderPeer.on('error', (err) => {
-        console.error('Sender peer error:', err);
-        if (qrTransferStatus) {
-          qrTransferStatus.innerHTML = `<span style="color: #ef4444;">Transfer network error (${err.type || err.message}). Please use "Download Pixel Package" above.</span>`;
-        }
-      });
+      } else {
+        throw new Error(`Server returned ${response.status}`);
+      }
     } catch (err) {
-      console.error('Could not start P2P transfer:', err);
+      console.warn('Local bridge server upload failed:', err);
+      qrCodeBox.innerHTML = '<div style="color: #f87171; font-size: 13px; padding: 12px; line-height: 1.5; max-width: 320px;"><strong>Local Server Required for Mobile Transfer</strong><br><br>Make sure <code>node web/server.js</code> is running in your terminal, and open <strong>http://localhost:3000</strong> in your computer\'s browser.</div>';
+      qrUrlEl.textContent = 'http://localhost:3000';
       if (qrTransferStatus) {
-        qrTransferStatus.innerHTML = '<span style="color: #ef4444;">Could not start transfer. Use "Download Pixel Package" above.</span>';
+        qrTransferStatus.innerHTML = '<span style="color: #94a3b8;">Or tap <strong>Download Pixel Package</strong> above to save directly on this computer.</span>';
       }
     }
   });
-
-  async function sendBlobOverPeerConnection(conn, blob, filename, onProgress) {
-    const CHUNK_SIZE = 32 * 1024; // 32 KB chunk size
-    const totalBytes = blob.size;
-    const totalChunks = Math.ceil(totalBytes / CHUNK_SIZE);
-
-    // Send metadata header as JSON string
-    conn.send(JSON.stringify({
-      type: 'meta',
-      filename: filename,
-      size: totalBytes,
-      totalChunks: totalChunks,
-      mimeType: blob.type || 'application/zip'
-    }));
-
-    const arrayBuffer = await blob.arrayBuffer();
-    let offset = 0;
-    const dataChannel = conn.dataChannel;
-
-    while (offset < totalBytes) {
-      // Flow control / backpressure to prevent WebRTC DataChannel buffer overflows
-      if (dataChannel && dataChannel.bufferedAmount > 512 * 1024) {
-        await new Promise((resolve) => {
-          const interval = setInterval(() => {
-            if (!dataChannel || dataChannel.bufferedAmount <= 128 * 1024) {
-              clearInterval(interval);
-              resolve();
-            }
-          }, 15);
-        });
-      }
-
-      const chunk = arrayBuffer.slice(offset, offset + CHUNK_SIZE);
-      conn.send(chunk);
-      offset += chunk.byteLength;
-
-      if (onProgress) {
-        onProgress(offset, totalBytes);
-      }
-    }
-
-    // Send completion message
-    conn.send(JSON.stringify({ type: 'done' }));
-  }
 
   function renderQrCode(url) {
     qrCodeBox.innerHTML = '';
@@ -1461,169 +1299,5 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
   }
-
-  // --- Mobile Receiver Mode (P2P Client on Pixel) ---
-  function initReceiverMode(hostPeerId) {
-    const stepsCard = document.getElementById('stepsCard');
-    const mainCard = document.getElementById('mainCard');
-    const receiverCard = document.getElementById('receiverCard');
-    const receiverTitle = document.getElementById('receiverTitle');
-    const receiverStatus = document.getElementById('receiverStatus');
-    const receiverProgressBar = document.getElementById('receiverProgressBar');
-    const receiverProgressText = document.getElementById('receiverProgressText');
-    const receiverSuccessActions = document.getElementById('receiverSuccessActions');
-    const receiverDownloadBtn = document.getElementById('receiverDownloadBtn');
-    const receiverErrorActions = document.getElementById('receiverErrorActions');
-
-    if (stepsCard) stepsCard.style.display = 'none';
-    if (mainCard) mainCard.style.display = 'none';
-    if (receiverCard) receiverCard.style.display = 'block';
-
-    if (typeof Peer === 'undefined') {
-      if (receiverTitle) receiverTitle.textContent = 'Transfer Library Missing';
-      if (receiverStatus) receiverStatus.textContent = 'WebRTC transfer library could not be loaded. Please refresh the page.';
-      if (receiverErrorActions) receiverErrorActions.style.display = 'block';
-      return;
-    }
-
-    if (receiverTitle) receiverTitle.textContent = 'Connecting to computer...';
-    if (receiverStatus) receiverStatus.textContent = 'Connecting to transfer network...';
-
-    let receiverPeer;
-    try {
-      receiverPeer = new Peer(PEER_CONFIG);
-    } catch (e) {
-      console.error('Peer creation failed:', e);
-      if (receiverTitle) receiverTitle.textContent = 'Connection Error';
-      if (receiverStatus) receiverStatus.textContent = 'Could not initialize P2P client: ' + e.message;
-      if (receiverErrorActions) receiverErrorActions.style.display = 'block';
-      return;
-    }
-
-    let connectionTimeout = setTimeout(() => {
-      if (receiverTitle) receiverTitle.textContent = 'Connection Timed Out';
-      if (receiverStatus) receiverStatus.textContent = 'Could not establish connection to the computer. Please make sure the computer tab is still open and active, then tap Retry.';
-      if (receiverErrorActions) receiverErrorActions.style.display = 'block';
-    }, 30000);
-
-    receiverPeer.on('open', (myPeerId) => {
-      console.log('Receiver peer open with ID:', myPeerId);
-      if (receiverStatus) receiverStatus.textContent = 'Found network. Connecting to your computer...';
-
-      const conn = receiverPeer.connect(hostPeerId, {
-        reliable: true,
-        serialization: 'raw'
-      });
-
-      let receivedMeta = null;
-      let receivedChunks = [];
-      let receivedBytes = 0;
-
-      const handleConnected = () => {
-        clearTimeout(connectionTimeout);
-        console.log('Receiver connected to host!');
-        if (receiverTitle) receiverTitle.textContent = 'Connected! Transferring...';
-        if (receiverStatus) receiverStatus.textContent = 'Connected to computer! Waiting for Motion Photos package...';
-      };
-
-      if (conn.open) {
-        handleConnected();
-      } else {
-        conn.on('open', handleConnected);
-      }
-
-      conn.on('data', (data) => {
-        if (typeof data === 'string') {
-          try {
-            const msg = JSON.parse(data);
-            if (msg.type === 'meta') {
-              receivedMeta = msg;
-              receivedChunks = [];
-              receivedBytes = 0;
-              if (receiverTitle) receiverTitle.textContent = 'Receiving Motion Photos...';
-              if (receiverStatus) receiverStatus.textContent = `Receiving ${msg.filename} (${(msg.size / (1024 * 1024)).toFixed(1)} MB)...`;
-            } else if (msg.type === 'done') {
-              const finalBlob = new Blob(receivedChunks, { type: (receivedMeta && receivedMeta.mimeType) || 'application/zip' });
-              const filename = (receivedMeta && receivedMeta.filename) || 'Pixel_MotionPhotos.zip';
-              const blobSizeMb = (finalBlob.size / (1024 * 1024)).toFixed(1);
-
-              if (receiverTitle) receiverTitle.textContent = '🎉 Transfer Complete!';
-              if (receiverStatus) receiverStatus.textContent = `Successfully received ${filename} (${blobSizeMb} MB).`;
-              if (receiverProgressBar) receiverProgressBar.style.width = '100%';
-              if (receiverProgressText) receiverProgressText.textContent = '100%';
-              if (receiverSuccessActions) receiverSuccessActions.style.display = 'block';
-
-              const downloadUrl = URL.createObjectURL(finalBlob);
-
-              if (receiverDownloadBtn) {
-                receiverDownloadBtn.onclick = () => {
-                  const a = document.createElement('a');
-                  a.href = downloadUrl;
-                  a.download = filename;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                };
-              }
-
-              // Auto-trigger download
-              try {
-                const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-              } catch (err) {
-                console.warn('Auto download blocked by browser:', err);
-              }
-            }
-          } catch (e) {
-            console.error('Error parsing data message:', e);
-          }
-        } else {
-          // Binary chunk (ArrayBuffer)
-          const byteLen = data.byteLength || (data.buffer && data.buffer.byteLength) || 0;
-          receivedChunks.push(data);
-          receivedBytes += byteLen;
-
-          if (receivedMeta && receivedMeta.size > 0) {
-            const pct = Math.round((receivedBytes / receivedMeta.size) * 100);
-            if (receiverProgressBar) receiverProgressBar.style.width = `${pct}%`;
-            if (receiverProgressText) receiverProgressText.textContent = `${pct}% (${(receivedBytes / (1024 * 1024)).toFixed(1)} / ${(receivedMeta.size / (1024 * 1024)).toFixed(1)} MB)`;
-          }
-        }
-      });
-
-      conn.on('error', (err) => {
-        console.error('Peer connection error:', err);
-        clearTimeout(connectionTimeout);
-        if (receiverTitle) receiverTitle.textContent = 'Transfer Interrupted';
-        if (receiverStatus) receiverStatus.textContent = 'The connection to the computer was lost. Please keep both browser tabs open and scan again.';
-        if (receiverErrorActions) receiverErrorActions.style.display = 'block';
-      });
-
-      conn.on('close', () => {
-        if (!receivedMeta || receivedBytes < (receivedMeta ? receivedMeta.size : 1)) {
-          clearTimeout(connectionTimeout);
-          if (receiverTitle) receiverTitle.textContent = 'Connection Closed';
-          if (receiverStatus) receiverStatus.textContent = 'The connection closed before the package transfer finished.';
-          if (receiverErrorActions) receiverErrorActions.style.display = 'block';
-        }
-      });
-    });
-
-    receiverPeer.on('disconnected', () => {
-      console.warn('Receiver peer disconnected, attempting reconnect...');
-      receiverPeer.reconnect();
-    });
-
-    receiverPeer.on('error', (err) => {
-      console.error('Receiver peer error:', err);
-      clearTimeout(connectionTimeout);
-      if (receiverTitle) receiverTitle.textContent = 'Connection Error';
-      if (receiverStatus) receiverStatus.textContent = 'Could not connect to transfer network (' + (err.type || err.message) + '). Please tap Retry.';
-      if (receiverErrorActions) receiverErrorActions.style.display = 'block';
-    });
-  }
 });
+
