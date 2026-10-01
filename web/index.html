@@ -164,7 +164,12 @@
           <div class="qr-url" id="qrUrl">http://...</div>
           <button type="button" class="dropzone-btn" id="copyLinkBtn">Copy Link</button>
         </div>
-        <div id="qrTransferStatus" style="font-size: 13px; color: #60a5fa; font-weight: 500; min-height: 20px;"></div>
+        <div class="lan-ip-container" id="lanIpContainer" style="margin-top: 12px; font-size: 13px; color: var(--text-dim); display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;">
+          <span>Wi-Fi Direct IP:</span>
+          <input type="text" id="lanIpInput" placeholder="e.g. 192.168.1.100" style="padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border, #334155); background: var(--bg-card, #1e293b); color: var(--text-main, #f8fafc); font-size: 13px; width: 140px; text-align: center;">
+          <span id="lanIpSourceNote" style="font-size: 11px; color: var(--text-muted, #94a3b8);">(Direct Wi-Fi speed)</span>
+        </div>
+        <div id="qrTransferStatus" style="font-size: 13px; color: #60a5fa; font-weight: 500; min-height: 20px; margin-top: 8px;"></div>
         <div class="debug-log-box" id="qrDebugLog" style="display: none; font-family: monospace; font-size: 11px; color: #94a3b8; background: #0f172a; padding: 10px 12px; border-radius: 8px; margin-top: 14px; max-height: 120px; overflow-y: auto; text-align: left; line-height: 1.6; border: 1px solid #1e293b;"></div>
       </div>
     </div>
@@ -191,6 +196,6 @@
     </footer> -->
   </div>
 
-  <script src="app.js?v=3.4"></script>
+  <script src="app.js?v=3.5"></script>
 </body>
 </html>

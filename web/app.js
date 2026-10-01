@@ -18,16 +18,58 @@ const PEER_CONFIG = {
 
 let serverInfo = null;
 
+function getActiveLanIp() {
+  if (serverInfo && serverInfo.ip && serverInfo.ip !== 'localhost' && serverInfo.ip !== '127.0.0.1') {
+    return serverInfo.ip;
+  }
+  const inputEl = document.getElementById('lanIpInput');
+  if (inputEl && inputEl.value.trim()) {
+    return inputEl.value.trim();
+  }
+  try {
+    const saved = localStorage.getItem('bridge_lan_ip');
+    if (saved && saved !== '127.0.0.1' && saved !== 'localhost') {
+      return saved;
+    }
+  } catch (_) {}
+  return null;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-  // Check if local bridge server is reachable
+  // Check if local bridge server is reachable (current origin first, then local daemon fallback)
   try {
     const res = await fetch('/api/network-ip');
     if (res.ok) {
       serverInfo = await res.json();
-      console.log('Bridge Server detected:', serverInfo);
+      console.log('Bridge Server detected on current origin:', serverInfo);
     }
-  } catch (_) {
-    console.log('Running in static standalone browser mode (no local bridge server).');
+  } catch (_) {}
+
+  if (!serverInfo) {
+    try {
+      const resLocal = await fetch('http://127.0.0.1:3000/api/network-ip', { mode: 'cors' });
+      if (resLocal.ok) {
+        serverInfo = await resLocal.json();
+        console.log('Bridge Server detected on local daemon (127.0.0.1:3000):', serverInfo);
+      }
+    } catch (_) {
+      console.log('Running in static standalone browser mode (no local bridge server).');
+    }
+  }
+
+  if (serverInfo && serverInfo.ip && serverInfo.ip !== 'localhost' && serverInfo.ip !== '127.0.0.1') {
+    try { localStorage.setItem('bridge_lan_ip', serverInfo.ip); } catch (_) {}
+  }
+
+  // Pre-fill LAN IP input if available
+  const initialLanIp = getActiveLanIp();
+  const lanIpInputEl = document.getElementById('lanIpInput');
+  const lanIpNoteEl = document.getElementById('lanIpSourceNote');
+  if (lanIpInputEl && initialLanIp) {
+    lanIpInputEl.value = initialLanIp;
+    if (lanIpNoteEl) {
+      lanIpNoteEl.textContent = serverInfo ? '(Auto-detected from local daemon)' : '(Saved)';
+    }
   }
 
   // Mobile Receiver Mode Check (When scanned via QR Code)
@@ -1282,25 +1324,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cand = data.payload.candidate;
             const candStr = cand.candidate || (typeof cand === 'string' ? cand : '');
             if (candStr.includes('.local')) {
-              const lanIp = (serverInfo && serverInfo.ip) || '127.0.0.1';
-              logHostDebug(`Unmasking mDNS candidate -> ${lanIp}`);
+              const lanIp = getActiveLanIp();
+              if (lanIp) {
+                logHostDebug(`Unmasking mDNS candidate -> ${lanIp}`);
 
-              // Candidate 1: Real LAN IP (for phone on Wi-Fi)
-              data.payload.candidate = {
-                candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, lanIp),
-                sdpMid: cand.sdpMid,
-                sdpMLineIndex: cand.sdpMLineIndex,
-                usernameFragment: cand.usernameFragment
-              };
-
-              // Candidate 2: Also send loopback (127.0.0.1) for same-computer testing!
-              if (lanIp !== '127.0.0.1') {
-                try {
-                  const dataLoopback = JSON.parse(JSON.stringify(data));
-                  dataLoopback.payload.candidate.candidate = candStr.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1');
-                  origSend(dataLoopback);
-                } catch (_) {}
+                // Candidate 1: Real LAN IP (for phone on Wi-Fi)
+                data.payload.candidate = {
+                  candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, lanIp),
+                  sdpMid: cand.sdpMid,
+                  sdpMLineIndex: cand.sdpMLineIndex,
+                  usernameFragment: cand.usernameFragment
+                };
               }
+
+              // Candidate 2: Always also send loopback (127.0.0.1) for same-computer testing!
+              try {
+                const dataLoopback = JSON.parse(JSON.stringify(data));
+                dataLoopback.payload.candidate = {
+                  candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1'),
+                  sdpMid: cand.sdpMid,
+                  sdpMLineIndex: cand.sdpMLineIndex,
+                  usernameFragment: cand.usernameFragment
+                };
+                origSend(dataLoopback);
+              } catch (_) {}
+
+              // Candidate 3: Also send original candidate
+              try {
+                const dataOrig = JSON.parse(JSON.stringify(data));
+                dataOrig.payload.candidate = {
+                  candidate: candStr,
+                  sdpMid: cand.sdpMid,
+                  sdpMLineIndex: cand.sdpMLineIndex,
+                  usernameFragment: cand.usernameFragment
+                };
+                origSend(dataOrig);
+              } catch (_) {}
             }
           }
           return origSend(data);
@@ -1323,28 +1382,48 @@ document.addEventListener('DOMContentLoaded', async () => {
       senderPeer.on('open', (peerId) => {
         logHostDebug(`Registered with signaling network. Peer ID: ${peerId.slice(0, 8)}...`);
 
-        let receiveUrl;
-        const hostIp = (serverInfo && serverInfo.ip) ? serverInfo.ip : '127.0.0.1';
-        if (window.location.protocol === 'file:') {
-          receiveUrl = `https://vaibhavshirole.github.io/LivePhotoBridge/?receive=${peerId}&ip=${hostIp}`;
-        } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-          if (serverInfo && serverInfo.ip) {
-            receiveUrl = `http://${serverInfo.ip}:${serverInfo.port || 3000}/?receive=${peerId}&ip=${serverInfo.ip}`;
+        const updateQrDisplay = () => {
+          const lanIp = getActiveLanIp();
+          let receiveUrl;
+          if (window.location.protocol === 'file:') {
+            receiveUrl = `https://vaibhavshirole.github.io/LivePhotoBridge/?receive=${peerId}` + (lanIp ? `&ip=${lanIp}` : '');
+          } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            if (lanIp) {
+              receiveUrl = `http://${lanIp}:${(serverInfo && serverInfo.port) || 3000}/?receive=${peerId}&ip=${lanIp}`;
+            } else {
+              receiveUrl = `http://localhost:3000/?receive=${peerId}`;
+            }
           } else {
-            receiveUrl = `http://localhost:3000/?receive=${peerId}&ip=${hostIp}`;
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('receive', peerId);
+            if (lanIp) {
+              currentUrl.searchParams.set('ip', lanIp);
+            } else {
+              currentUrl.searchParams.delete('ip');
+            }
+            currentUrl.hash = '';
+            receiveUrl = currentUrl.toString();
           }
-        } else {
-          const currentUrl = new URL(window.location.href);
-          currentUrl.searchParams.set('receive', peerId);
-          currentUrl.searchParams.set('ip', hostIp);
-          currentUrl.hash = '';
-          receiveUrl = currentUrl.toString();
-        }
 
-        renderQrCode(receiveUrl);
-        qrUrlEl.textContent = receiveUrl;
+          renderQrCode(receiveUrl);
+          qrUrlEl.textContent = receiveUrl;
+        };
+
+        updateQrDisplay();
         if (qrTransferStatus) {
           qrTransferStatus.textContent = '';
+        }
+
+        const lanIpInputEl = document.getElementById('lanIpInput');
+        if (lanIpInputEl) {
+          lanIpInputEl.value = getActiveLanIp() || '';
+          lanIpInputEl.oninput = () => {
+            const val = lanIpInputEl.value.trim();
+            if (val) {
+              try { localStorage.setItem('bridge_lan_ip', val); } catch (_) {}
+            }
+            updateQrDisplay();
+          };
         }
       });
 
@@ -1355,22 +1434,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (conn.peerConnection) {
-          const origAddIceCandidate = conn.peerConnection.addIceCandidate.bind(conn.peerConnection);
-          conn.peerConnection.addIceCandidate = function(candidate) {
-            if (candidate && candidate.candidate && candidate.candidate.includes('.local')) {
-              const lanIp = (serverInfo && serverInfo.ip) || '127.0.0.1';
-              logHostDebug(`Unmasking incoming candidate -> ${lanIp}`);
-              const newCand = new RTCIceCandidate({
-                candidate: candidate.candidate.replace(/[a-zA-Z0-9-]+\.local/g, lanIp),
-                sdpMid: candidate.sdpMid,
-                sdpMLineIndex: candidate.sdpMLineIndex,
-                usernameFragment: candidate.usernameFragment
-              });
-              return origAddIceCandidate(newCand);
-            }
-            return origAddIceCandidate(candidate);
-          };
-
           conn.peerConnection.addEventListener('iceconnectionstatechange', () => {
             const state = conn.peerConnection.iceConnectionState;
             logHostDebug(`ICE State: ${state}`);
@@ -1642,7 +1705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       logReceiverDebug(`Calling computer peer: ${hostPeerId.slice(0, 8)}...`);
       if (receiverStatus) receiverStatus.textContent = 'Connecting to computer...';
 
-      // Unmask mDNS candidate on receiver so host can connect directly
+      // Send loopback candidate for same-computer testing without mutating original candidate
       if (receiverPeer.socket) {
         const origReceiverSend = receiverPeer.socket.send.bind(receiverPeer.socket);
         receiverPeer.socket.send = function(data) {
@@ -1650,22 +1713,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cand = data.payload.candidate;
             const candStr = cand.candidate || (typeof cand === 'string' ? cand : '');
             if (candStr.includes('.local')) {
-              const urlParams = new URLSearchParams(window.location.search);
-              const targetIp = (serverInfo && serverInfo.ip) || urlParams.get('ip') || (window.location.hostname !== 'localhost' ? window.location.hostname : '127.0.0.1');
-              logReceiverDebug(`Unmasking receiver candidate -> ${targetIp}`);
-              data.payload.candidate = {
-                candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, targetIp),
-                sdpMid: cand.sdpMid,
-                sdpMLineIndex: cand.sdpMLineIndex,
-                usernameFragment: cand.usernameFragment
-              };
-              if (targetIp !== '127.0.0.1') {
-                try {
-                  const dataLoopback = JSON.parse(JSON.stringify(data));
-                  dataLoopback.payload.candidate.candidate = candStr.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1');
-                  origReceiverSend(dataLoopback);
-                } catch (_) {}
-              }
+              try {
+                const dataLoopback = JSON.parse(JSON.stringify(data));
+                dataLoopback.payload.candidate = {
+                  candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1'),
+                  sdpMid: cand.sdpMid,
+                  sdpMLineIndex: cand.sdpMLineIndex,
+                  usernameFragment: cand.usernameFragment
+                };
+                origReceiverSend(dataLoopback);
+              } catch (_) {}
             }
           }
           return origReceiverSend(data);
@@ -1702,15 +1759,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         conn.peerConnection.addIceCandidate = function(candidate) {
           if (candidate && candidate.candidate && candidate.candidate.includes('.local')) {
             const urlParams = new URLSearchParams(window.location.search);
-            const targetIp = (serverInfo && serverInfo.ip) || urlParams.get('ip') || (window.location.hostname !== 'localhost' ? window.location.hostname : '127.0.0.1');
-            logReceiverDebug(`Unmasking incoming candidate -> ${targetIp}`);
-            const newCand = new RTCIceCandidate({
-              candidate: candidate.candidate.replace(/[a-zA-Z0-9-]+\.local/g, targetIp),
-              sdpMid: candidate.sdpMid,
-              sdpMLineIndex: candidate.sdpMLineIndex,
-              usernameFragment: candidate.usernameFragment
-            });
-            return origAddIceCandidate(newCand);
+            const targetIp = (serverInfo && serverInfo.ip) || urlParams.get('ip');
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+            if (targetIp && targetIp !== '127.0.0.1' && targetIp !== 'localhost') {
+              logReceiverDebug(`Unmasking incoming candidate -> ${targetIp}`);
+              const newCand = new RTCIceCandidate({
+                candidate: candidate.candidate.replace(/[a-zA-Z0-9-]+\.local/g, targetIp),
+                sdpMid: candidate.sdpMid,
+                sdpMLineIndex: candidate.sdpMLineIndex,
+                usernameFragment: candidate.usernameFragment
+              });
+              origAddIceCandidate(newCand).catch(() => {});
+            } else if (isLocalhost) {
+              const newCand = new RTCIceCandidate({
+                candidate: candidate.candidate.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1'),
+                sdpMid: candidate.sdpMid,
+                sdpMLineIndex: candidate.sdpMLineIndex,
+                usernameFragment: candidate.usernameFragment
+              });
+              origAddIceCandidate(newCand).catch(() => {});
+            }
           }
           return origAddIceCandidate(candidate);
         };
