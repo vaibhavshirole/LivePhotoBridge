@@ -1,4 +1,28 @@
 // LivePhotoBridge Web — Client-side Muxing & Sharing Engine
+
+// Reliable STUN + TURN relay configuration for WebRTC P2P mobile transfer
+const PEER_CONFIG = {
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      {
+        urls: [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp'
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
+    ],
+    iceCandidatePoolSize: 10
+  }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   // Mobile Receiver Mode Check (When scanned via QR Code)
   const urlParams = new URLSearchParams(window.location.search);
@@ -1268,7 +1292,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qrTransferStatus.textContent = 'Connecting to transfer network...';
       }
 
-      const senderPeer = new Peer();
+      const senderPeer = new Peer(PEER_CONFIG);
       activeSenderPeer = senderPeer;
 
       senderPeer.on('open', (peerId) => {
@@ -1280,14 +1304,20 @@ document.addEventListener('DOMContentLoaded', () => {
         renderQrCode(receiveUrl);
         qrUrlEl.textContent = receiveUrl;
         if (qrTransferStatus) {
-          qrTransferStatus.textContent = '⚡ Direct P2P transfer ready. Scan with your Pixel camera to download.';
+          qrTransferStatus.textContent = 'Direct transfer ready. Scan with your Pixel camera to download.';
         }
       });
 
       senderPeer.on('connection', (conn) => {
-        conn.on('open', async () => {
+        console.log('Incoming connection from mobile device:', conn.peer);
+        if (qrTransferStatus) {
+          qrTransferStatus.textContent = '📲 Phone connected! Initializing transfer...';
+        }
+
+        const handleConnected = async () => {
+          console.log('WebRTC DataChannel opened, starting blob transfer...');
           if (qrTransferStatus) {
-            qrTransferStatus.textContent = '📲 Pixel connected! Sending package...';
+            qrTransferStatus.textContent = '📲 Phone connected! Sending Motion Photos package...';
           }
           try {
             await sendBlobOverPeerConnection(conn, finalZipBlob, `Pixel_MotionPhotos_${Date.now()}.zip`, (sent, total) => {
@@ -1302,16 +1332,27 @@ document.addEventListener('DOMContentLoaded', () => {
           } catch (err) {
             console.error('Transfer error:', err);
             if (qrTransferStatus) {
-              qrTransferStatus.innerHTML = '<span style="color: #ef4444;">Transfer interrupted. Please keep both screens open and scan again.</span>';
+              qrTransferStatus.innerHTML = '<span style="color: #ef4444;">Transfer interrupted. Please keep both screens open and try again.</span>';
             }
           }
-        });
+        };
+
+        if (conn.open) {
+          handleConnected();
+        } else {
+          conn.on('open', handleConnected);
+        }
+      });
+
+      senderPeer.on('disconnected', () => {
+        console.warn('Sender peer disconnected from server, attempting reconnect...');
+        senderPeer.reconnect();
       });
 
       senderPeer.on('error', (err) => {
         console.error('Sender peer error:', err);
         if (qrTransferStatus) {
-          qrTransferStatus.innerHTML = '<span style="color: #ef4444;">Transfer network error. Use "Download Pixel Package" above.</span>';
+          qrTransferStatus.innerHTML = `<span style="color: #ef4444;">Transfer network error (${err.type || err.message}). Please use "Download Pixel Package" above.</span>`;
         }
       });
     } catch (err) {
@@ -1327,14 +1368,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const totalBytes = blob.size;
     const totalChunks = Math.ceil(totalBytes / CHUNK_SIZE);
 
-    // Send metadata header
-    conn.send({
+    // Send metadata header as JSON string
+    conn.send(JSON.stringify({
       type: 'meta',
       filename: filename,
       size: totalBytes,
       totalChunks: totalChunks,
       mimeType: blob.type || 'application/zip'
-    });
+    }));
 
     const arrayBuffer = await blob.arrayBuffer();
     let offset = 0;
@@ -1363,7 +1404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Send completion message
-    conn.send({ type: 'done' });
+    conn.send(JSON.stringify({ type: 'done' }));
   }
 
   function renderQrCode(url) {
@@ -1446,11 +1487,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (receiverTitle) receiverTitle.textContent = 'Connecting to computer...';
-    if (receiverStatus) receiverStatus.textContent = 'Establishing secure direct connection...';
+    if (receiverStatus) receiverStatus.textContent = 'Connecting to transfer network...';
 
     let receiverPeer;
     try {
-      receiverPeer = new Peer();
+      receiverPeer = new Peer(PEER_CONFIG);
     } catch (e) {
       console.error('Peer creation failed:', e);
       if (receiverTitle) receiverTitle.textContent = 'Connection Error';
@@ -1461,70 +1502,87 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let connectionTimeout = setTimeout(() => {
       if (receiverTitle) receiverTitle.textContent = 'Connection Timed Out';
-      if (receiverStatus) receiverStatus.textContent = 'Could not reach computer. Make sure the computer browser tab is still open and scan the QR code again.';
+      if (receiverStatus) receiverStatus.textContent = 'Could not establish connection to the computer. Please make sure the computer tab is still open and active, then tap Retry.';
       if (receiverErrorActions) receiverErrorActions.style.display = 'block';
-    }, 20000);
+    }, 30000);
 
-    receiverPeer.on('open', () => {
-      if (receiverStatus) receiverStatus.textContent = 'Found network. Connecting to computer...';
-      const conn = receiverPeer.connect(hostPeerId, { reliable: true });
+    receiverPeer.on('open', (myPeerId) => {
+      console.log('Receiver peer open with ID:', myPeerId);
+      if (receiverStatus) receiverStatus.textContent = 'Found network. Connecting to your computer...';
+
+      const conn = receiverPeer.connect(hostPeerId, {
+        reliable: true,
+        serialization: 'raw'
+      });
 
       let receivedMeta = null;
       let receivedChunks = [];
       let receivedBytes = 0;
 
-      conn.on('open', () => {
+      const handleConnected = () => {
         clearTimeout(connectionTimeout);
+        console.log('Receiver connected to host!');
         if (receiverTitle) receiverTitle.textContent = 'Connected! Transferring...';
-        if (receiverStatus) receiverStatus.textContent = 'Receiving Motion Photos package directly from computer...';
-      });
+        if (receiverStatus) receiverStatus.textContent = 'Connected to computer! Waiting for Motion Photos package...';
+      };
+
+      if (conn.open) {
+        handleConnected();
+      } else {
+        conn.on('open', handleConnected);
+      }
 
       conn.on('data', (data) => {
-        if (data && typeof data === 'object' && !(data instanceof ArrayBuffer) && !(data instanceof Uint8Array)) {
-          if (data.type === 'meta') {
-            receivedMeta = data;
-            receivedChunks = [];
-            receivedBytes = 0;
-            if (receiverTitle) receiverTitle.textContent = 'Receiving Motion Photos...';
-            if (receiverStatus) receiverStatus.textContent = `Receiving ${data.filename} (${(data.size / (1024 * 1024)).toFixed(1)} MB)...`;
-          } else if (data.type === 'done') {
-            const finalBlob = new Blob(receivedChunks, { type: (receivedMeta && receivedMeta.mimeType) || 'application/zip' });
-            const filename = (receivedMeta && receivedMeta.filename) || 'Pixel_MotionPhotos.zip';
-            const blobSizeMb = (finalBlob.size / (1024 * 1024)).toFixed(1);
+        if (typeof data === 'string') {
+          try {
+            const msg = JSON.parse(data);
+            if (msg.type === 'meta') {
+              receivedMeta = msg;
+              receivedChunks = [];
+              receivedBytes = 0;
+              if (receiverTitle) receiverTitle.textContent = 'Receiving Motion Photos...';
+              if (receiverStatus) receiverStatus.textContent = `Receiving ${msg.filename} (${(msg.size / (1024 * 1024)).toFixed(1)} MB)...`;
+            } else if (msg.type === 'done') {
+              const finalBlob = new Blob(receivedChunks, { type: (receivedMeta && receivedMeta.mimeType) || 'application/zip' });
+              const filename = (receivedMeta && receivedMeta.filename) || 'Pixel_MotionPhotos.zip';
+              const blobSizeMb = (finalBlob.size / (1024 * 1024)).toFixed(1);
 
-            if (receiverTitle) receiverTitle.textContent = '🎉 Transfer Complete!';
-            if (receiverStatus) receiverStatus.textContent = `Successfully received ${filename} (${blobSizeMb} MB).`;
-            if (receiverProgressBar) receiverProgressBar.style.width = '100%';
-            if (receiverProgressText) receiverProgressText.textContent = '100%';
-            if (receiverSuccessActions) receiverSuccessActions.style.display = 'block';
+              if (receiverTitle) receiverTitle.textContent = '🎉 Transfer Complete!';
+              if (receiverStatus) receiverStatus.textContent = `Successfully received ${filename} (${blobSizeMb} MB).`;
+              if (receiverProgressBar) receiverProgressBar.style.width = '100%';
+              if (receiverProgressText) receiverProgressText.textContent = '100%';
+              if (receiverSuccessActions) receiverSuccessActions.style.display = 'block';
 
-            const downloadUrl = URL.createObjectURL(finalBlob);
+              const downloadUrl = URL.createObjectURL(finalBlob);
 
-            if (receiverDownloadBtn) {
-              receiverDownloadBtn.onclick = () => {
+              if (receiverDownloadBtn) {
+                receiverDownloadBtn.onclick = () => {
+                  const a = document.createElement('a');
+                  a.href = downloadUrl;
+                  a.download = filename;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                };
+              }
+
+              // Auto-trigger download
+              try {
                 const a = document.createElement('a');
                 a.href = downloadUrl;
                 a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-              };
+              } catch (err) {
+                console.warn('Auto download blocked by browser:', err);
+              }
             }
-
-            // Auto-trigger download
-            try {
-              const a = document.createElement('a');
-              a.href = downloadUrl;
-              a.download = filename;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-            } catch (err) {
-              console.warn('Auto download blocked by browser:', err);
-            }
+          } catch (e) {
+            console.error('Error parsing data message:', e);
           }
         } else {
-          // Binary chunk
+          // Binary chunk (ArrayBuffer)
           const byteLen = data.byteLength || (data.buffer && data.buffer.byteLength) || 0;
           receivedChunks.push(data);
           receivedBytes += byteLen;
@@ -1555,11 +1613,16 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    receiverPeer.on('disconnected', () => {
+      console.warn('Receiver peer disconnected, attempting reconnect...');
+      receiverPeer.reconnect();
+    });
+
     receiverPeer.on('error', (err) => {
       console.error('Receiver peer error:', err);
       clearTimeout(connectionTimeout);
       if (receiverTitle) receiverTitle.textContent = 'Connection Error';
-      if (receiverStatus) receiverStatus.textContent = 'Could not connect to signaling service. Please refresh to try again.';
+      if (receiverStatus) receiverStatus.textContent = 'Could not connect to transfer network (' + (err.type || err.message) + '). Please tap Retry.';
       if (receiverErrorActions) receiverErrorActions.style.display = 'block';
     });
   }
