@@ -1,5 +1,44 @@
 // LivePhotoBridge Web — Client-side Muxing & Sharing Engine
-document.addEventListener('DOMContentLoaded', () => {
+
+// Robust WebRTC configuration for P2P mobile transfer
+const PEER_CONFIG = {
+  debug: 2,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' }
+    ],
+    iceCandidatePoolSize: 10
+  }
+};
+
+let serverInfo = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Check if local bridge server is reachable
+  try {
+    const res = await fetch('/api/network-ip');
+    if (res.ok) {
+      serverInfo = await res.json();
+      console.log('Bridge Server detected:', serverInfo);
+    }
+  } catch (_) {
+    console.log('Running in static standalone browser mode (no local bridge server).');
+  }
+
+  // Mobile Receiver Mode Check (When scanned via QR Code)
+  const urlParams = new URLSearchParams(window.location.search);
+  const receivePeerId = urlParams.get('receive') || (window.location.hash.startsWith('#receive=') ? window.location.hash.replace('#receive=', '') : null);
+
+  if (receivePeerId) {
+    initReceiverMode(receivePeerId);
+    return;
+  }
+
   // Elements
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
@@ -49,18 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let passThroughFiles = [];     // array of { file: File, relativePath: string, type: 'image'|'video'|'other' }
   let processedBlobs = [];       // array of { filename, blob, photoBlob, videoBlob }
   let finalZipBlob = null;
-  let serverInfo = null;
-
-  // Check if local bridge server is reachable
-  fetch('/api/network-ip')
-    .then(r => r.json())
-    .then(data => {
-      serverInfo = data;
-      console.log('Bridge Server detected:', serverInfo);
-    })
-    .catch(() => {
-      console.log('Running in static standalone browser mode (no local bridge server).');
-    });
+  let activeSenderPeer = null;
 
   // Toggle HEIC to JPG conversion mode
   if (convertHeicToggle) {
@@ -1179,7 +1207,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resultsCard.classList.add('visible');
     const zipSizeMb = (zipBlob.size / (1024 * 1024)).toFixed(1);
     
-    let summaryText = `🎉 Ready for your Pixel! Converted ${numLivePhotos} Live Photos to Google Motion Photos`;
+    let summaryText = `Converted ${numLivePhotos} Live Photos to Google Motion Photos`;
     if (numOtherMedia > 0) {
       summaryText += ` and preserved ${numOtherMedia} other media files`;
     }
@@ -1203,47 +1231,296 @@ document.addEventListener('DOMContentLoaded', () => {
     a.click();
   });
 
-  // --- Direct Wi-Fi Download via QR Code ---
+  function logHostDebug(msg) {
+    console.log('[Host P2P]', msg);
+    const box = document.getElementById('qrDebugLog');
+    if (box) {
+      box.style.display = 'block';
+      const div = document.createElement('div');
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  // --- QR Code Mobile Sharing (WebRTC Direct Transfer) ---
   showQrBtn.addEventListener('click', async () => {
     if (!finalZipBlob) return;
 
     qrSection.classList.add('visible');
     qrSection.scrollIntoView({ behavior: 'smooth' });
 
-    qrCodeBox.innerHTML = '<span style="color:#64748b; font-size:12px;">Generating QR Code...</span>';
-    if (qrTransferStatus) {
-      qrTransferStatus.textContent = 'Preparing Wi-Fi download link...';
+    const debugBox = document.getElementById('qrDebugLog');
+    if (debugBox) {
+      debugBox.innerHTML = '';
+      debugBox.style.display = 'block';
     }
 
+    qrCodeBox.innerHTML = '<span style="color:#64748b; font-size:12px;">Connecting to transfer network...</span>';
+    if (qrTransferStatus) {
+      qrTransferStatus.textContent = 'Connecting to transfer network...';
+    }
+    logHostDebug('Initializing WebRTC Peer...');
+
     try {
-      const response = await fetch('/api/bundle', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/zip',
-          'X-Filename': `Pixel_MotionPhotos_${Date.now()}.zip`
-        },
-        body: finalZipBlob
+      if (typeof Peer === 'undefined') {
+        throw new Error('PeerJS library not loaded');
+      }
+
+      if (activeSenderPeer && !activeSenderPeer.destroyed) {
+        activeSenderPeer.destroy();
+      }
+
+      const senderPeer = new Peer(PEER_CONFIG);
+      activeSenderPeer = senderPeer;
+
+      // Unmask mDNS candidate so peer can connect directly over local Wi-Fi or loopback
+      if (senderPeer.socket) {
+        const origSend = senderPeer.socket.send.bind(senderPeer.socket);
+        senderPeer.socket.send = function(data) {
+          if (data && data.type === 'CANDIDATE' && data.payload && data.payload.candidate) {
+            const cand = data.payload.candidate;
+            const candStr = cand.candidate || (typeof cand === 'string' ? cand : '');
+            if (candStr.includes('.local')) {
+              const lanIp = (serverInfo && serverInfo.ip) || '127.0.0.1';
+              logHostDebug(`Unmasking mDNS candidate -> ${lanIp}`);
+
+              // Candidate 1: Real LAN IP (for phone on Wi-Fi)
+              data.payload.candidate = {
+                candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, lanIp),
+                sdpMid: cand.sdpMid,
+                sdpMLineIndex: cand.sdpMLineIndex,
+                usernameFragment: cand.usernameFragment
+              };
+
+              // Candidate 2: Also send loopback (127.0.0.1) for same-computer testing!
+              if (lanIp !== '127.0.0.1') {
+                try {
+                  const dataLoopback = JSON.parse(JSON.stringify(data));
+                  dataLoopback.payload.candidate.candidate = candStr.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1');
+                  origSend(dataLoopback);
+                } catch (_) {}
+              }
+            }
+          }
+          return origSend(data);
+        };
+      }
+
+      // Heartbeat keep-alive to keep WebSocket to 0.peerjs.com alive while waiting for scan
+      const keepAlive = setInterval(() => {
+        if (senderPeer && !senderPeer.destroyed) {
+          try {
+            if (senderPeer.socket && senderPeer.socket._ws && senderPeer.socket._ws.readyState === WebSocket.OPEN) {
+              senderPeer.socket._ws.send(JSON.stringify({ type: 'PING' }));
+            }
+          } catch (_) {}
+        } else {
+          clearInterval(keepAlive);
+        }
+      }, 5000);
+
+      senderPeer.on('open', (peerId) => {
+        logHostDebug(`Registered with signaling network. Peer ID: ${peerId.slice(0, 8)}...`);
+
+        let receiveUrl;
+        const hostIp = (serverInfo && serverInfo.ip) ? serverInfo.ip : '127.0.0.1';
+        if (window.location.protocol === 'file:') {
+          receiveUrl = `https://vaibhavshirole.github.io/LivePhotoBridge/?receive=${peerId}&ip=${hostIp}`;
+        } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          if (serverInfo && serverInfo.ip) {
+            receiveUrl = `http://${serverInfo.ip}:${serverInfo.port || 3000}/?receive=${peerId}&ip=${serverInfo.ip}`;
+          } else {
+            receiveUrl = `http://localhost:3000/?receive=${peerId}&ip=${hostIp}`;
+          }
+        } else {
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.set('receive', peerId);
+          currentUrl.searchParams.set('ip', hostIp);
+          currentUrl.hash = '';
+          receiveUrl = currentUrl.toString();
+        }
+
+        renderQrCode(receiveUrl);
+        qrUrlEl.textContent = receiveUrl;
+        if (qrTransferStatus) {
+          qrTransferStatus.innerHTML = '<span style="color: #60a5fa; font-weight: 500;">📶 Direct P2P ready! Scan QR code with your Pixel to transfer.</span>';
+        }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        renderQrCode(data.downloadUrl);
-        qrUrlEl.textContent = data.downloadUrl;
+      senderPeer.on('connection', (conn) => {
+        logHostDebug(`Incoming phone connection from: ${conn.peer.slice(0, 8)}...`);
         if (qrTransferStatus) {
-          qrTransferStatus.innerHTML = '<span style="color: #34d399; font-weight: 500;">📶 Connect your phone to the same Wi-Fi and scan to download!</span>';
+          qrTransferStatus.textContent = '📲 Phone connected! Negotiating channel...';
         }
-      } else {
-        throw new Error(`Server returned ${response.status}`);
-      }
+
+        if (conn.peerConnection) {
+          const origAddIceCandidate = conn.peerConnection.addIceCandidate.bind(conn.peerConnection);
+          conn.peerConnection.addIceCandidate = function(candidate) {
+            if (candidate && candidate.candidate && candidate.candidate.includes('.local')) {
+              const lanIp = (serverInfo && serverInfo.ip) || '127.0.0.1';
+              logHostDebug(`Unmasking incoming candidate -> ${lanIp}`);
+              const newCand = new RTCIceCandidate({
+                candidate: candidate.candidate.replace(/[a-zA-Z0-9-]+\.local/g, lanIp),
+                sdpMid: candidate.sdpMid,
+                sdpMLineIndex: candidate.sdpMLineIndex,
+                usernameFragment: candidate.usernameFragment
+              });
+              return origAddIceCandidate(newCand);
+            }
+            return origAddIceCandidate(candidate);
+          };
+
+          conn.peerConnection.addEventListener('iceconnectionstatechange', () => {
+            const state = conn.peerConnection.iceConnectionState;
+            logHostDebug(`ICE State: ${state}`);
+            if (state === 'connected' || state === 'completed') {
+              logHostDebug('Direct P2P connection established!');
+            }
+          });
+          conn.peerConnection.addEventListener('connectionstatechange', () => {
+            logHostDebug(`Connection State: ${conn.peerConnection.connectionState}`);
+          });
+          conn.peerConnection.addEventListener('icecandidate', (e) => {
+            if (e.candidate) {
+              logHostDebug(`Candidate: ${e.candidate.type || 'host'} (${e.candidate.protocol})`);
+            }
+          });
+        }
+
+        let transferStarted = false;
+        const startTransfer = async () => {
+          if (transferStarted) return;
+          transferStarted = true;
+          logHostDebug('Starting blob stream to phone...');
+          if (qrTransferStatus) {
+            qrTransferStatus.textContent = '📲 Sending Motion Photos package...';
+          }
+          try {
+            await sendBlobOverPeerConnection(conn, finalZipBlob, `Pixel_MotionPhotos_${Date.now()}.zip`, (sent, total) => {
+              const pct = Math.round((sent / total) * 100);
+              if (qrTransferStatus) {
+                qrTransferStatus.textContent = `🚀 Sending to Pixel: ${pct}% (${(sent / (1024 * 1024)).toFixed(1)} / ${(total / (1024 * 1024)).toFixed(1)} MB)`;
+              }
+            });
+            logHostDebug('All data chunks sent successfully!');
+            if (qrTransferStatus) {
+              qrTransferStatus.innerHTML = '<span style="color: #34d399; font-weight: 600;">✅ Package successfully sent to your Pixel!</span>';
+            }
+          } catch (err) {
+            console.error('Transfer error:', err);
+            logHostDebug(`Transfer error: ${err.message}`);
+            if (qrTransferStatus) {
+              qrTransferStatus.innerHTML = '<span style="color: #ef4444;">Transfer interrupted. Please keep both screens open and try again.</span>';
+            }
+          }
+        };
+
+        conn.on('data', (data) => {
+          if (data && data.type === 'ready') {
+            logHostDebug('Received READY signal from phone.');
+            startTransfer();
+          }
+        });
+
+        conn.on('open', () => {
+          logHostDebug('DataChannel OPEN.');
+          if (qrTransferStatus) {
+            qrTransferStatus.textContent = '📲 Phone linked! Sending package...';
+          }
+          setTimeout(() => {
+            if (!transferStarted) {
+              startTransfer();
+            }
+          }, 1500);
+        });
+
+        conn.on('error', (err) => {
+          console.error('Peer connection error:', err);
+          logHostDebug(`Conn error: ${err.type || err.message}`);
+          if (qrTransferStatus) {
+            qrTransferStatus.innerHTML = '<span style="color: #ef4444;">Connection error. Please try scanning again.</span>';
+          }
+        });
+      });
+
+      senderPeer.on('disconnected', () => {
+        logHostDebug('Sender peer disconnected from broker, reconnecting...');
+        try { senderPeer.reconnect(); } catch (_) {}
+      });
+
+      senderPeer.on('error', (err) => {
+        console.error('Sender peer error:', err);
+        logHostDebug(`Peer error: ${err.type || err.message}`);
+        if (qrTransferStatus) {
+          qrTransferStatus.innerHTML = `<span style="color: #ef4444;">Transfer network error (${err.type || err.message}). Please use "Download Pixel Package" above.</span>`;
+        }
+      });
     } catch (err) {
-      console.warn('Local bridge server upload failed:', err);
-      qrCodeBox.innerHTML = '<div style="color: #f87171; font-size: 13px; padding: 12px; line-height: 1.5; max-width: 320px;"><strong>Local Server Required for Mobile Transfer</strong><br><br>Make sure <code>node web/server.js</code> is running in your terminal, and open <strong>http://localhost:3000</strong> in your computer\'s browser.</div>';
-      qrUrlEl.textContent = 'http://localhost:3000';
+      console.error('Could not start P2P transfer:', err);
+      logHostDebug(`Fatal: ${err.message}`);
       if (qrTransferStatus) {
-        qrTransferStatus.innerHTML = '<span style="color: #94a3b8;">Or tap <strong>Download Pixel Package</strong> above to save directly on this computer.</span>';
+        qrTransferStatus.innerHTML = '<span style="color: #ef4444;">Could not start transfer. Use "Download Pixel Package" above.</span>';
       }
     }
   });
+
+  async function sendBlobOverPeerConnection(conn, blob, filename, onProgress) {
+    const CHUNK_SIZE = 64 * 1024; // 64 KB chunk size (optimal for WebRTC)
+    const totalBytes = blob.size;
+    const totalChunks = Math.ceil(totalBytes / CHUNK_SIZE);
+
+    // Send metadata header
+    conn.send({
+      type: 'meta',
+      filename: filename,
+      size: totalBytes,
+      totalChunks: totalChunks,
+      mimeType: blob.type || 'application/zip'
+    });
+
+    const arrayBuffer = await blob.arrayBuffer();
+    let offset = 0;
+    const dataChannel = conn.dataChannel;
+
+    if (dataChannel) {
+      dataChannel.bufferedAmountLowThreshold = 256 * 1024;
+    }
+
+    while (offset < totalBytes) {
+      // Flow control / backpressure to prevent WebRTC DataChannel buffer overflows
+      if (dataChannel && dataChannel.bufferedAmount > 1024 * 1024) {
+        await new Promise((resolve) => {
+          let resolved = false;
+          const onLow = () => {
+            if (!resolved) {
+              resolved = true;
+              if (dataChannel) dataChannel.removeEventListener('bufferedamountlow', onLow);
+              resolve();
+            }
+          };
+          dataChannel.addEventListener('bufferedamountlow', onLow);
+          setTimeout(onLow, 50);
+        });
+      }
+
+      const chunk = arrayBuffer.slice(offset, offset + CHUNK_SIZE);
+      conn.send(chunk);
+      offset += chunk.byteLength;
+
+      if (onProgress) {
+        onProgress(offset, totalBytes);
+      }
+    }
+
+    // Wait until dataChannel is completely flushed
+    while (dataChannel && dataChannel.bufferedAmount > 0) {
+      await new Promise(r => setTimeout(r, 40));
+    }
+
+    // Send completion message
+    conn.send({ type: 'done' });
+  }
 
   function renderQrCode(url) {
     qrCodeBox.innerHTML = '';
@@ -1299,5 +1576,253 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
   }
-});
 
+  // --- Mobile Receiver Mode (P2P Client on Pixel) ---
+  function initReceiverMode(hostPeerId) {
+    const stepsCard = document.getElementById('stepsCard');
+    const mainCard = document.getElementById('mainCard');
+    const receiverCard = document.getElementById('receiverCard');
+    const receiverTitle = document.getElementById('receiverTitle');
+    const receiverStatus = document.getElementById('receiverStatus');
+    const receiverProgressBar = document.getElementById('receiverProgressBar');
+    const receiverProgressText = document.getElementById('receiverProgressText');
+    const receiverSuccessActions = document.getElementById('receiverSuccessActions');
+    const receiverDownloadBtn = document.getElementById('receiverDownloadBtn');
+    const receiverErrorActions = document.getElementById('receiverErrorActions');
+
+    if (stepsCard) stepsCard.style.display = 'none';
+    if (mainCard) mainCard.style.display = 'none';
+    if (receiverCard) receiverCard.style.display = 'block';
+
+    function logReceiverDebug(msg) {
+      console.log('[Receiver P2P]', msg);
+      const box = document.getElementById('receiverDebugLog');
+      if (box) {
+        box.style.display = 'block';
+        const div = document.createElement('div');
+        div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+      }
+    }
+
+    if (typeof Peer === 'undefined') {
+      if (receiverTitle) receiverTitle.textContent = 'Transfer Library Missing';
+      if (receiverStatus) receiverStatus.textContent = 'WebRTC transfer library could not be loaded. Please refresh the page.';
+      if (receiverErrorActions) receiverErrorActions.style.display = 'block';
+      logReceiverDebug('PeerJS library is missing.');
+      return;
+    }
+
+    if (receiverTitle) receiverTitle.textContent = 'Connecting to computer...';
+    if (receiverStatus) receiverStatus.textContent = 'Connecting to transfer network...';
+    logReceiverDebug('Initializing receiver peer client...');
+
+    let receiverPeer;
+    try {
+      receiverPeer = new Peer(PEER_CONFIG);
+    } catch (e) {
+      console.error('Peer creation failed:', e);
+      if (receiverTitle) receiverTitle.textContent = 'Connection Error';
+      if (receiverStatus) receiverStatus.textContent = 'Could not initialize P2P client: ' + e.message;
+      if (receiverErrorActions) receiverErrorActions.style.display = 'block';
+      logReceiverDebug(`Peer creation error: ${e.message}`);
+      return;
+    }
+
+    let connectionTimeout = setTimeout(() => {
+      if (receiverTitle) receiverTitle.textContent = 'Connection Timed Out';
+      if (receiverStatus) receiverStatus.textContent = 'Could not establish connection to the computer. Please make sure the computer tab is still open and active, then tap Retry.';
+      if (receiverErrorActions) receiverErrorActions.style.display = 'block';
+      logReceiverDebug('Connection timed out (45s). Ensure computer tab is open.');
+    }, 45000);
+
+    receiverPeer.on('open', (myPeerId) => {
+      logReceiverDebug(`Receiver peer active: ${myPeerId.slice(0, 8)}...`);
+      logReceiverDebug(`Calling computer peer: ${hostPeerId.slice(0, 8)}...`);
+      if (receiverStatus) receiverStatus.textContent = 'Connecting to computer...';
+
+      // Unmask mDNS candidate on receiver so host can connect directly
+      if (receiverPeer.socket) {
+        const origReceiverSend = receiverPeer.socket.send.bind(receiverPeer.socket);
+        receiverPeer.socket.send = function(data) {
+          if (data && data.type === 'CANDIDATE' && data.payload && data.payload.candidate) {
+            const cand = data.payload.candidate;
+            const candStr = cand.candidate || (typeof cand === 'string' ? cand : '');
+            if (candStr.includes('.local')) {
+              const urlParams = new URLSearchParams(window.location.search);
+              const targetIp = (serverInfo && serverInfo.ip) || urlParams.get('ip') || (window.location.hostname !== 'localhost' ? window.location.hostname : '127.0.0.1');
+              logReceiverDebug(`Unmasking receiver candidate -> ${targetIp}`);
+              data.payload.candidate = {
+                candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, targetIp),
+                sdpMid: cand.sdpMid,
+                sdpMLineIndex: cand.sdpMLineIndex,
+                usernameFragment: cand.usernameFragment
+              };
+              if (targetIp !== '127.0.0.1') {
+                try {
+                  const dataLoopback = JSON.parse(JSON.stringify(data));
+                  dataLoopback.payload.candidate.candidate = candStr.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1');
+                  origReceiverSend(dataLoopback);
+                } catch (_) {}
+              }
+            }
+          }
+          return origReceiverSend(data);
+        };
+      }
+
+      const conn = receiverPeer.connect(hostPeerId, {
+        reliable: true
+      });
+
+      let receivedMeta = null;
+      let receivedChunks = [];
+      let receivedBytes = 0;
+
+      const handleConnected = () => {
+        clearTimeout(connectionTimeout);
+        logReceiverDebug('DataChannel OPEN! Connected to host.');
+        if (receiverTitle) receiverTitle.textContent = 'Connected! Transferring...';
+        if (receiverStatus) receiverStatus.textContent = 'Connected to computer! Waiting for Motion Photos package...';
+        try {
+          conn.send({ type: 'ready' });
+          logReceiverDebug('Sent READY signal to computer.');
+        } catch (_) {}
+      };
+
+      if (conn.open) {
+        handleConnected();
+      } else {
+        conn.on('open', handleConnected);
+      }
+
+      if (conn.peerConnection) {
+        const origAddIceCandidate = conn.peerConnection.addIceCandidate.bind(conn.peerConnection);
+        conn.peerConnection.addIceCandidate = function(candidate) {
+          if (candidate && candidate.candidate && candidate.candidate.includes('.local')) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetIp = (serverInfo && serverInfo.ip) || urlParams.get('ip') || (window.location.hostname !== 'localhost' ? window.location.hostname : '127.0.0.1');
+            logReceiverDebug(`Unmasking incoming candidate -> ${targetIp}`);
+            const newCand = new RTCIceCandidate({
+              candidate: candidate.candidate.replace(/[a-zA-Z0-9-]+\.local/g, targetIp),
+              sdpMid: candidate.sdpMid,
+              sdpMLineIndex: candidate.sdpMLineIndex,
+              usernameFragment: candidate.usernameFragment
+            });
+            return origAddIceCandidate(newCand);
+          }
+          return origAddIceCandidate(candidate);
+        };
+
+        conn.peerConnection.addEventListener('iceconnectionstatechange', () => {
+          const iceState = conn.peerConnection.iceConnectionState;
+          logReceiverDebug(`ICE State: ${iceState}`);
+          if (iceState === 'connected' || iceState === 'completed') {
+            clearTimeout(connectionTimeout);
+            logReceiverDebug('P2P Direct Channel Connected!');
+          } else if (iceState === 'failed') {
+            logReceiverDebug('ICE failed. Attempting restart...');
+            try { conn.peerConnection.restartIce(); } catch (_) {}
+          }
+        });
+        conn.peerConnection.addEventListener('connectionstatechange', () => {
+          logReceiverDebug(`Connection State: ${conn.peerConnection.connectionState}`);
+        });
+        conn.peerConnection.addEventListener('icecandidate', (e) => {
+          if (e.candidate) {
+            logReceiverDebug(`Candidate: ${e.candidate.type || 'host'} (${e.candidate.protocol})`);
+          }
+        });
+      }
+
+      conn.on('data', (data) => {
+        if (data && typeof data === 'object' && !(data instanceof ArrayBuffer) && !(data instanceof Uint8Array)) {
+          if (data.type === 'meta') {
+            receivedMeta = data;
+            receivedChunks = [];
+            receivedBytes = 0;
+            if (receiverTitle) receiverTitle.textContent = 'Receiving Motion Photos...';
+            if (receiverStatus) receiverStatus.textContent = `Receiving ${data.filename} (${(data.size / (1024 * 1024)).toFixed(1)} MB)...`;
+          } else if (data.type === 'done') {
+            const finalBlob = new Blob(receivedChunks, { type: (receivedMeta && receivedMeta.mimeType) || 'application/zip' });
+            const filename = (receivedMeta && receivedMeta.filename) || 'Pixel_MotionPhotos.zip';
+            const blobSizeMb = (finalBlob.size / (1024 * 1024)).toFixed(1);
+
+            if (receiverTitle) receiverTitle.textContent = 'Transfer Complete';
+            if (receiverStatus) receiverStatus.textContent = `Successfully received ${filename} (${blobSizeMb} MB).`;
+            if (receiverProgressBar) receiverProgressBar.style.width = '100%';
+            if (receiverProgressText) receiverProgressText.textContent = '100%';
+            if (receiverSuccessActions) receiverSuccessActions.style.display = 'block';
+
+            const downloadUrl = URL.createObjectURL(finalBlob);
+
+            if (receiverDownloadBtn) {
+              receiverDownloadBtn.onclick = () => {
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+              };
+            }
+
+            // Auto-trigger download
+            try {
+              const a = document.createElement('a');
+              a.href = downloadUrl;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            } catch (err) {
+              console.warn('Auto download blocked by browser:', err);
+            }
+          }
+        } else {
+          // Binary chunk (ArrayBuffer)
+          const byteLen = data.byteLength || (data.buffer && data.buffer.byteLength) || data.length || 0;
+          receivedChunks.push(data);
+          receivedBytes += byteLen;
+
+          if (receivedMeta && receivedMeta.size > 0) {
+            const pct = Math.round((receivedBytes / receivedMeta.size) * 100);
+            if (receiverProgressBar) receiverProgressBar.style.width = `${pct}%`;
+            if (receiverProgressText) receiverProgressText.textContent = `${pct}% (${(receivedBytes / (1024 * 1024)).toFixed(1)} / ${(receivedMeta.size / (1024 * 1024)).toFixed(1)} MB)`;
+          }
+        }
+      });
+
+      conn.on('error', (err) => {
+        console.error('Peer connection error:', err);
+        clearTimeout(connectionTimeout);
+        if (receiverTitle) receiverTitle.textContent = 'Transfer Interrupted';
+        if (receiverStatus) receiverStatus.textContent = 'The connection to the computer was lost. Please keep both browser tabs open and scan again.';
+        if (receiverErrorActions) receiverErrorActions.style.display = 'block';
+      });
+
+      conn.on('close', () => {
+        if (!receivedMeta || receivedBytes < (receivedMeta ? receivedMeta.size : 1)) {
+          clearTimeout(connectionTimeout);
+          if (receiverTitle) receiverTitle.textContent = 'Connection Closed';
+          if (receiverStatus) receiverStatus.textContent = 'The connection closed before the package transfer finished.';
+          if (receiverErrorActions) receiverErrorActions.style.display = 'block';
+        }
+      });
+    });
+
+    receiverPeer.on('disconnected', () => {
+      console.warn('Receiver peer disconnected, attempting reconnect...');
+      receiverPeer.reconnect();
+    });
+
+    receiverPeer.on('error', (err) => {
+      console.error('Receiver peer error:', err);
+      clearTimeout(connectionTimeout);
+      if (receiverTitle) receiverTitle.textContent = 'Connection Error';
+      if (receiverStatus) receiverStatus.textContent = 'Could not connect to transfer network (' + (err.type || err.message) + '). Please tap Retry.';
+      if (receiverErrorActions) receiverErrorActions.style.display = 'block';
+    });
+  }
+});
