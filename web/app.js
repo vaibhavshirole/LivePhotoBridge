@@ -438,7 +438,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (passThroughFiles.length > 0) {
       const header = document.createElement('div');
       header.style.cssText = 'font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-top: 10px;';
-      header.textContent = `📁 Other Media to Preserve (${passThroughFiles.length} items: PNG, MOV, etc.)`;
+      header.textContent = `Other Media to Preserve (${passThroughFiles.length} items: PNG, MOV, etc.)`;
       pairsList.appendChild(header);
 
       passThroughFiles.slice(0, 8).forEach((item) => {
@@ -1211,10 +1211,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (numOtherMedia > 0) {
       summaryText += ` and preserved ${numOtherMedia} other media files`;
     }
-    summaryText += ` (${zipSizeMb} MB total).`;
+    summaryText += ` (${zipSizeMb} MB total)`;
 
     successMessage.textContent = summaryText;
-    downloadZipBtn.textContent = `📦 Download Pixel Package (${zipSizeMb} MB)`;
+    downloadZipBtn.textContent = `Download Package (${zipSizeMb} MB)`;
 
     // Setup Preview for the first converted Motion Photo
     if (processedBlobs.length > 0) {
@@ -1344,14 +1344,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderQrCode(receiveUrl);
         qrUrlEl.textContent = receiveUrl;
         if (qrTransferStatus) {
-          qrTransferStatus.innerHTML = '<span style="color: #60a5fa; font-weight: 500;">📶 Direct P2P ready! Scan QR code with your Pixel to transfer.</span>';
+          qrTransferStatus.textContent = '';
         }
       });
 
       senderPeer.on('connection', (conn) => {
         logHostDebug(`Incoming phone connection from: ${conn.peer.slice(0, 8)}...`);
         if (qrTransferStatus) {
-          qrTransferStatus.textContent = '📲 Phone connected! Negotiating channel...';
+          qrTransferStatus.textContent = 'Phone connected. Negotiating channel...';
         }
 
         if (conn.peerConnection) {
@@ -1394,18 +1394,18 @@ document.addEventListener('DOMContentLoaded', async () => {
           transferStarted = true;
           logHostDebug('Starting blob stream to phone...');
           if (qrTransferStatus) {
-            qrTransferStatus.textContent = '📲 Sending Motion Photos package...';
+            qrTransferStatus.textContent = 'Sending Motion Photos package...';
           }
           try {
             await sendBlobOverPeerConnection(conn, finalZipBlob, `Pixel_MotionPhotos_${Date.now()}.zip`, (sent, total) => {
               const pct = Math.round((sent / total) * 100);
               if (qrTransferStatus) {
-                qrTransferStatus.textContent = `🚀 Sending to Pixel: ${pct}% (${(sent / (1024 * 1024)).toFixed(1)} / ${(total / (1024 * 1024)).toFixed(1)} MB)`;
+                qrTransferStatus.textContent = `Sending: ${pct}% (${(sent / (1024 * 1024)).toFixed(1)} / ${(total / (1024 * 1024)).toFixed(1)} MB)`;
               }
             });
             logHostDebug('All data chunks sent successfully!');
             if (qrTransferStatus) {
-              qrTransferStatus.innerHTML = '<span style="color: #34d399; font-weight: 600;">✅ Package successfully sent to your Pixel!</span>';
+              qrTransferStatus.innerHTML = '<span style="color: #34d399; font-weight: 600;">Package successfully sent!</span>';
             }
           } catch (err) {
             console.error('Transfer error:', err);
@@ -1426,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         conn.on('open', () => {
           logHostDebug('DataChannel OPEN.');
           if (qrTransferStatus) {
-            qrTransferStatus.textContent = '📲 Phone linked! Sending package...';
+            qrTransferStatus.textContent = 'Phone linked. Sending package...';
           }
           setTimeout(() => {
             if (!transferStarted) {
@@ -1538,8 +1538,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const text = qrUrlEl.textContent;
     if (text) {
       navigator.clipboard.writeText(text);
-      copyLinkBtn.textContent = '✓ Copied!';
-      setTimeout(() => copyLinkBtn.textContent = '📋 Copy Link', 2000);
+      copyLinkBtn.textContent = 'Copied!';
+      setTimeout(() => copyLinkBtn.textContent = 'Copy Link', 2000);
     }
   });
 

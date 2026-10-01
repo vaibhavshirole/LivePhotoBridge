@@ -44,7 +44,6 @@
 
     <!-- Receiver Mode Card (Shown on mobile when QR code is scanned) -->
     <div class="card" id="receiverCard" style="display: none; padding: 32px 24px; text-align: center;">
-      <div style="font-size: 52px; margin-bottom: 16px;">📦 ➔ 📱</div>
       <h2 id="receiverTitle" style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">Connecting to your computer...</h2>
       <p id="receiverStatus" style="font-size: 14px; color: var(--text-dim); margin-bottom: 24px; line-height: 1.5; max-width: 440px; margin-left: auto; margin-right: auto;">Establishing a direct secure connection to transfer your Google Motion Photos package.</p>
       
@@ -57,9 +56,6 @@
         <button type="button" class="btn btn-accent" id="receiverDownloadBtn" style="width: 100%; padding: 16px; font-size: 16px;">
           <span>Download Motion Photo Package (.zip)</span>
         </button>
-        <div style="margin-top: 14px; font-size: 13px; color: var(--text-dim); line-height: 1.5;">
-          💡 <strong>Pixel Tip:</strong> Once downloaded, open your Files app to extract the photos, or view them directly in Google Photos.
-        </div>
       </div>
 
       <div id="receiverErrorActions" style="display: none; margin-top: 24px;">
@@ -153,21 +149,20 @@
 
       <div class="download-actions">
         <button type="button" class="btn" id="downloadZipBtn">
-          <span>📦 Download All (.zip)</span>
+          <span>Download All (.zip)</span>
         </button>
         <button type="button" class="btn btn-secondary" id="showQrBtn">
-          <span>📱 Scan QR Code (Send to Phone)</span>
+          <span>Generate QR Code to Transfer Package</span>
         </button>
       </div>
 
       <!-- QR Code Mobile Sharing Drawer -->
       <div class="qr-section" id="qrSection">
-        <div class="qr-title">Scan to Download on Mobile Device</div>
-        <div class="qr-subtitle">Scan this QR code with your iPhone or Android camera to instantly download the ZIP bundle onto your mobile device.</div>
+        <div class="qr-title">Scan to download Motion Photos (.zip)</div>
         <div class="qr-box" id="qrCodeBox"></div>
         <div style="display: flex; align-items: center; gap: 8px; max-width: 100%;">
           <div class="qr-url" id="qrUrl">http://...</div>
-          <button type="button" class="dropzone-btn" id="copyLinkBtn">📋 Copy Link</button>
+          <button type="button" class="dropzone-btn" id="copyLinkBtn">Copy Link</button>
         </div>
         <div id="qrTransferStatus" style="font-size: 13px; color: #60a5fa; font-weight: 500; min-height: 20px;"></div>
         <div class="debug-log-box" id="qrDebugLog" style="display: none; font-family: monospace; font-size: 11px; color: #94a3b8; background: #0f172a; padding: 10px 12px; border-radius: 8px; margin-top: 14px; max-height: 120px; overflow-y: auto; text-align: left; line-height: 1.6; border: 1px solid #1e293b;"></div>
@@ -192,10 +187,10 @@
     </div>
 
 <!--     <footer>
-      🔒 100% Client-Side Processing • Your photos never leave your device
+      100% Client-Side Processing • Your photos never leave your device
     </footer> -->
   </div>
 
-  <script src="app.js?v=3.2"></script>
+  <script src="app.js?v=3.4"></script>
 </body>
 </html>
