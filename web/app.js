@@ -36,25 +36,32 @@ function getActiveLanIp() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Check if local bridge server is reachable (current origin first, then local daemon fallback)
-  try {
-    const res = await fetch('/api/network-ip');
-    if (res.ok) {
-      serverInfo = await res.json();
-      console.log('Bridge Server detected on current origin:', serverInfo);
-    }
-  } catch (_) {}
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetHostIp = urlParams.get('ip');
+
+  // Check if local bridge server is reachable (current origin, target IP, or local daemon)
+  const candidateOrigins = [];
+  if (window.location.origin && window.location.origin.startsWith('http')) {
+    candidateOrigins.push('');
+  }
+  if (targetHostIp && targetHostIp !== '127.0.0.1' && targetHostIp !== 'localhost') {
+    candidateOrigins.push(`http://${targetHostIp}:3000`);
+  }
+  candidateOrigins.push('http://127.0.0.1:3000');
+
+  for (const origin of candidateOrigins) {
+    try {
+      const res = await fetch(`${origin}/api/network-ip`, { mode: 'cors' });
+      if (res.ok) {
+        serverInfo = await res.json();
+        console.log(`Bridge Server detected on ${origin || 'current origin'}:`, serverInfo);
+        break;
+      }
+    } catch (_) {}
+  }
 
   if (!serverInfo) {
-    try {
-      const resLocal = await fetch('http://127.0.0.1:3000/api/network-ip', { mode: 'cors' });
-      if (resLocal.ok) {
-        serverInfo = await resLocal.json();
-        console.log('Bridge Server detected on local daemon (127.0.0.1:3000):', serverInfo);
-      }
-    } catch (_) {
-      console.log('Running in static standalone browser mode (no local bridge server).');
-    }
+    console.log('Running in static standalone browser mode (no local bridge server).');
   }
 
   if (serverInfo && serverInfo.ip && serverInfo.ip !== 'localhost' && serverInfo.ip !== '127.0.0.1') {
@@ -73,7 +80,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Mobile Receiver Mode Check (When scanned via QR Code)
-  const urlParams = new URLSearchParams(window.location.search);
   const receivePeerId = urlParams.get('receive') || (window.location.hash.startsWith('#receive=') ? window.location.hash.replace('#receive=', '') : null);
 
   if (receivePeerId) {
@@ -131,6 +137,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let processedBlobs = [];       // array of { filename, blob, photoBlob, videoBlob }
   let finalZipBlob = null;
   let activeSenderPeer = null;
+  window.__setFinalZipBlob = (b) => { finalZipBlob = b; };
 
   // Toggle HEIC to JPG conversion mode
   if (convertHeicToggle) {
@@ -1235,9 +1242,16 @@ document.addEventListener('DOMContentLoaded', async () => {
           };
         } else {
           progressDetails.textContent = `Bundling media ${i + 1} of ${totalPassThrough}: ${item.file.name}...`;
+          let inputData = item.file;
+          try {
+            const buf = await item.file.arrayBuffer();
+            inputData = new Uint8Array(buf);
+          } catch (_) {
+            inputData = item.file;
+          }
           yield {
             name: item.relativePath,
-            input: item.file,
+            input: inputData,
             lastModified: item.file.lastModified ? new Date(item.file.lastModified) : new Date()
           };
         }
@@ -1460,6 +1474,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (conn.peerConnection) {
+          const origAddIceCandidate = conn.peerConnection.addIceCandidate.bind(conn.peerConnection);
+          conn.peerConnection.addIceCandidate = function(candidate) {
+            if (candidate && candidate.candidate) {
+              const candStr = candidate.candidate;
+              const candType = candidate.type || (candStr.match(/typ (\w+)/) || [,'host'])[1];
+              const candProto = candidate.protocol || (candStr.match(/\s(udp|tcp)\s/i) || [,'udp'])[1].toLowerCase();
+              logHostDebug(`Remote candidate: ${candType} (${candProto})`);
+
+              if (candStr.includes('.local')) {
+                // For same-computer testing across browser windows, unmask to 127.0.0.1
+                try {
+                  const loopbackCand = new RTCIceCandidate({
+                    candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1'),
+                    sdpMid: candidate.sdpMid,
+                    sdpMLineIndex: candidate.sdpMLineIndex,
+                    usernameFragment: candidate.usernameFragment
+                  });
+                  origAddIceCandidate(loopbackCand).catch(() => {});
+                  logHostDebug('Unmasked remote candidate -> 127.0.0.1');
+                } catch (_) {}
+              }
+            }
+            return origAddIceCandidate(candidate);
+          };
+
           conn.peerConnection.addEventListener('iceconnectionstatechange', () => {
             const state = conn.peerConnection.iceConnectionState;
             logHostDebug(`ICE State: ${state}`);
@@ -1568,7 +1607,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       mimeType: blob.type || 'application/zip'
     });
 
-    const arrayBuffer = await blob.arrayBuffer();
     let offset = 0;
     const dataChannel = conn.dataChannel;
 
@@ -1593,9 +1631,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
 
-      const chunk = arrayBuffer.slice(offset, offset + CHUNK_SIZE);
+      const nextEnd = Math.min(offset + CHUNK_SIZE, totalBytes);
+      const chunkBlob = blob.slice(offset, nextEnd);
+      const chunk = await chunkBlob.arrayBuffer();
+
       conn.send(chunk);
-      offset += chunk.byteLength;
+      offset = nextEnd;
 
       if (onProgress) {
         onProgress(offset, totalBytes);
@@ -1731,7 +1772,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       logReceiverDebug(`Calling computer peer: ${hostPeerId.slice(0, 8)}...`);
       if (receiverStatus) receiverStatus.textContent = 'Connecting to computer...';
 
-      // Send loopback candidate for same-computer testing without mutating original candidate
+      // Send loopback candidate and real phone LAN IP if discovered from bridge server
       if (receiverPeer.socket) {
         const origReceiverSend = receiverPeer.socket.send.bind(receiverPeer.socket);
         receiverPeer.socket.send = function(data) {
@@ -1739,6 +1780,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cand = data.payload.candidate;
             const candStr = cand.candidate || (typeof cand === 'string' ? cand : '');
             if (candStr.includes('.local')) {
+              // If phone detected its own client IP from bridge daemon, unmask to real phone LAN IP
+              const myClientIp = serverInfo && serverInfo.clientIp;
+              if (myClientIp && myClientIp !== '127.0.0.1' && myClientIp !== 'localhost') {
+                try {
+                  const dataClient = JSON.parse(JSON.stringify(data));
+                  dataClient.payload.candidate = {
+                    candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, myClientIp),
+                    sdpMid: cand.sdpMid,
+                    sdpMLineIndex: cand.sdpMLineIndex,
+                    usernameFragment: cand.usernameFragment
+                  };
+                  origReceiverSend(dataClient);
+                  logReceiverDebug(`Unmasking receiver candidate -> ${myClientIp}`);
+                } catch (_) {}
+              }
+
+              // Always also send loopback candidate for same-computer testing
               try {
                 const dataLoopback = JSON.parse(JSON.stringify(data));
                 dataLoopback.payload.candidate = {
@@ -1783,28 +1841,41 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (conn.peerConnection) {
         const origAddIceCandidate = conn.peerConnection.addIceCandidate.bind(conn.peerConnection);
         conn.peerConnection.addIceCandidate = function(candidate) {
-          if (candidate && candidate.candidate && candidate.candidate.includes('.local')) {
-            const urlParams = new URLSearchParams(window.location.search);
-            const targetIp = (serverInfo && serverInfo.ip) || urlParams.get('ip');
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          if (candidate && candidate.candidate) {
+            const candStr = candidate.candidate;
+            const candType = candidate.type || (candStr.match(/typ (\w+)/) || [,'host'])[1];
+            const candProto = candidate.protocol || (candStr.match(/\s(udp|tcp)\s/i) || [,'udp'])[1].toLowerCase();
+            logReceiverDebug(`Remote candidate: ${candType} (${candProto})`);
 
-            if (targetIp && targetIp !== '127.0.0.1' && targetIp !== 'localhost') {
-              logReceiverDebug(`Unmasking incoming candidate -> ${targetIp}`);
-              const newCand = new RTCIceCandidate({
-                candidate: candidate.candidate.replace(/[a-zA-Z0-9-]+\.local/g, targetIp),
-                sdpMid: candidate.sdpMid,
-                sdpMLineIndex: candidate.sdpMLineIndex,
-                usernameFragment: candidate.usernameFragment
-              });
-              origAddIceCandidate(newCand).catch(() => {});
-            } else if (isLocalhost) {
-              const newCand = new RTCIceCandidate({
-                candidate: candidate.candidate.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1'),
-                sdpMid: candidate.sdpMid,
-                sdpMLineIndex: candidate.sdpMLineIndex,
-                usernameFragment: candidate.usernameFragment
-              });
-              origAddIceCandidate(newCand).catch(() => {});
+            if (candStr.includes('.local')) {
+              const urlParams = new URLSearchParams(window.location.search);
+              const targetIp = (serverInfo && serverInfo.ip) || urlParams.get('ip');
+
+              // Always unmask to loopback 127.0.0.1 for same-computer testing
+              try {
+                const loopbackCand = new RTCIceCandidate({
+                  candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, '127.0.0.1'),
+                  sdpMid: candidate.sdpMid,
+                  sdpMLineIndex: candidate.sdpMLineIndex,
+                  usernameFragment: candidate.usernameFragment
+                });
+                origAddIceCandidate(loopbackCand).catch(() => {});
+                logReceiverDebug('Unmasking incoming candidate -> 127.0.0.1');
+              } catch (_) {}
+
+              // Also unmask to target LAN IP if provided
+              if (targetIp && targetIp !== '127.0.0.1' && targetIp !== 'localhost') {
+                try {
+                  const lanCand = new RTCIceCandidate({
+                    candidate: candStr.replace(/[a-zA-Z0-9-]+\.local/g, targetIp),
+                    sdpMid: candidate.sdpMid,
+                    sdpMLineIndex: candidate.sdpMLineIndex,
+                    usernameFragment: candidate.usernameFragment
+                  });
+                  origAddIceCandidate(lanCand).catch(() => {});
+                  logReceiverDebug(`Unmasking incoming candidate -> ${targetIp}`);
+                } catch (_) {}
+              }
             }
           }
           return origAddIceCandidate(candidate);
@@ -1837,6 +1908,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             receivedMeta = data;
             receivedChunks = [];
             receivedBytes = 0;
+            logReceiverDebug(`Receiving metadata: ${data.filename} (${(data.size / (1024 * 1024)).toFixed(1)} MB)...`);
             if (receiverTitle) receiverTitle.textContent = 'Receiving Motion Photos...';
             if (receiverStatus) receiverStatus.textContent = `Receiving ${data.filename} (${(data.size / (1024 * 1024)).toFixed(1)} MB)...`;
           } else if (data.type === 'done') {
@@ -1844,6 +1916,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const filename = (receivedMeta && receivedMeta.filename) || 'Pixel_MotionPhotos.zip';
             const blobSizeMb = (finalBlob.size / (1024 * 1024)).toFixed(1);
 
+            logReceiverDebug(`Transfer Complete! Received ${filename} (${blobSizeMb} MB).`);
             if (receiverTitle) receiverTitle.textContent = 'Transfer Complete';
             if (receiverStatus) receiverStatus.textContent = `Successfully received ${filename} (${blobSizeMb} MB).`;
             if (receiverProgressBar) receiverProgressBar.style.width = '100%';

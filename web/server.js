@@ -53,6 +53,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Filename');
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -62,11 +63,14 @@ const server = http.createServer((req, res) => {
 
   // API: Get Local Network IP & URL
   if (req.method === 'GET' && pathname === '/api/network-ip') {
+    const rawClientIp = req.socket.remoteAddress || '';
+    const clientIp = rawClientIp.replace(/^.*:/, '') || '127.0.0.1';
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       ip: localIp,
       port: PORT,
-      url: `http://${localIp}:${PORT}`
+      url: `http://${localIp}:${PORT}`,
+      clientIp: clientIp
     }));
     return;
   }
@@ -103,7 +107,7 @@ const server = http.createServer((req, res) => {
   // API: Download Bundle (Scanned via mobile QR code)
   if ((req.method === 'GET' || req.method === 'HEAD') && pathname.startsWith('/download/')) {
     const id = pathname.replace('/download/', '').trim();
-    const bundle = bundles.get(id);
+    const bundle = (id === 'latest' ? Array.from(bundles.values()).pop() : bundles.get(id));
 
     if (!bundle) {
       res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -164,7 +168,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   const localIp = getLocalIp();
   console.log(`\n=================================================`);
-  console.log(`🚀 LivePhotoBridge Web Server Active`);
+  console.log(`LivePhotoBridge Web Server Active`);
   console.log(`─────────────────────────────────────────────────`);
   console.log(`  Local URL   : http://localhost:${PORT}`);
   console.log(`  Network URL : http://${localIp}:${PORT}`);
