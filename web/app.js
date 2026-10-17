@@ -1153,87 +1153,113 @@ document.addEventListener('DOMContentLoaded', async () => {
     previewCard.classList.remove('visible');
     processedBlobs = [];
 
-    const zip = new JSZip();
     const convertHeic = convertHeicToggle ? convertHeicToggle.checked : false;
+    let firstPreviewItem = null;
 
-    // 1. Process and Mux all Live Photos
-    for (let i = 0; i < totalPairs; i++) {
-      const pair = matchedPairs[i];
-      const percent = Math.round(((i) / totalWork) * 85);
-      progressBar.style.width = `${percent}%`;
-      progressPercent.textContent = `${percent}%`;
+    async function* generateZipFiles() {
+      // 1. Process and Mux all Live Photos one-by-one (streaming directly into ZIP)
+      for (let i = 0; i < totalPairs; i++) {
+        const pair = matchedPairs[i];
+        const percent = Math.round(((i) / totalWork) * 85);
+        progressBar.style.width = `${percent}%`;
+        progressPercent.textContent = `${percent}%`;
 
-      await new Promise(r => setTimeout(r, 15));
+        await new Promise(r => setTimeout(r, 10));
 
-      const photoBuf = new Uint8Array(await pair.photo.arrayBuffer());
-      const videoBuf = new Uint8Array(await pair.video.arrayBuffer());
+        const photoBuf = new Uint8Array(await pair.photo.arrayBuffer());
+        const videoBuf = new Uint8Array(await pair.video.arrayBuffer());
 
-      let muxedBlob;
-      let displayPhotoBlob;
-      let targetExt;
+        let muxedBlob;
+        let displayPhotoBlob;
+        let targetExt;
 
-      if (pair.format === 'heic' && convertHeic) {
-        progressDetails.textContent = `Converting HEIC to 100% JPG & Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
-        const { jpegBlob, jpegBuf } = await convertHeicToJpegWithExif(pair.photo, photoBuf);
-        muxedBlob = muxJpeg(jpegBuf, videoBuf, 750000, pair.isStarred);
-        displayPhotoBlob = jpegBlob;
-        targetExt = 'MP.JPG';
-      } else if (pair.format === 'heic') {
-        progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
-        muxedBlob = muxHeic(photoBuf, videoBuf, 750000, pair.isStarred);
-        displayPhotoBlob = new Blob([photoBuf], { type: 'image/heic' });
-        targetExt = 'MP.HEIC';
-      } else {
-        progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
-        muxedBlob = muxJpeg(photoBuf, videoBuf, 750000, pair.isStarred);
-        displayPhotoBlob = new Blob([photoBuf], { type: 'image/jpeg' });
-        targetExt = 'MP.JPG';
+        if (pair.format === 'heic' && convertHeic) {
+          progressDetails.textContent = `Converting HEIC to 100% JPG & Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
+          const { jpegBlob, jpegBuf } = await convertHeicToJpegWithExif(pair.photo, photoBuf);
+          muxedBlob = muxJpeg(jpegBuf, videoBuf, 750000, pair.isStarred);
+          displayPhotoBlob = jpegBlob;
+          targetExt = 'MP.JPG';
+        } else if (pair.format === 'heic') {
+          progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
+          muxedBlob = muxHeic(photoBuf, videoBuf, 750000, pair.isStarred);
+          displayPhotoBlob = new Blob([photoBuf], { type: 'image/heic' });
+          targetExt = 'MP.HEIC';
+        } else {
+          progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
+          muxedBlob = muxJpeg(photoBuf, videoBuf, 750000, pair.isStarred);
+          displayPhotoBlob = new Blob([photoBuf], { type: 'image/jpeg' });
+          targetExt = 'MP.JPG';
+        }
+
+        const outputFilename = `${pair.stem}.${targetExt}`;
+        const zipPath = pair.dir ? `${pair.dir}/${outputFilename}` : outputFilename;
+
+        // Keep preview only for the first photo to preserve memory
+        if (!firstPreviewItem) {
+          firstPreviewItem = {
+            filename: outputFilename,
+            zipPath,
+            blob: muxedBlob,
+            photoBlob: displayPhotoBlob,
+            videoBlob: new Blob([videoBuf], { type: 'video/mp4' })
+          };
+          processedBlobs = [firstPreviewItem];
+        }
+
+        yield {
+          name: zipPath,
+          input: muxedBlob,
+          lastModified: pair.photo.lastModified ? new Date(pair.photo.lastModified) : new Date()
+        };
       }
 
-      const outputFilename = `${pair.stem}.${targetExt}`;
-      const zipPath = pair.dir ? `${pair.dir}/${outputFilename}` : outputFilename;
+      // 2. Stream all Pass-Through Media
+      for (let i = 0; i < totalPassThrough; i++) {
+        const item = passThroughFiles[i];
+        const completed = totalPairs + i;
+        const percent = Math.round((completed / totalWork) * 85);
+        progressBar.style.width = `${percent}%`;
+        progressPercent.textContent = `${percent}%`;
 
-      zip.file(zipPath, muxedBlob);
+        if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
 
-      processedBlobs.push({
-        filename: outputFilename,
-        zipPath,
-        blob: muxedBlob,
-        photoBlob: displayPhotoBlob,
-        videoBlob: new Blob([videoBuf], { type: 'video/mp4' })
-      });
-    }
-
-    // 2. Add all Pass-Through Media (PNGs, videos, standalone photos)
-    for (let i = 0; i < totalPassThrough; i++) {
-      const item = passThroughFiles[i];
-      const completed = totalPairs + i;
-      const percent = Math.round((completed / totalWork) * 85);
-      progressBar.style.width = `${percent}%`;
-      progressPercent.textContent = `${percent}%`;
-
-      if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
-
-      const fileBuf = await item.file.arrayBuffer();
-
-      if (item.format === 'heic' && convertHeic) {
-        progressDetails.textContent = `Converting standalone HEIC ${item.file.name} to 100% JPG...`;
-        const { jpegBlob } = await convertHeicToJpegWithExif(item.file, new Uint8Array(fileBuf));
-        const newRelativePath = item.relativePath.replace(/\.heic$/i, '.JPG').replace(/\.heif$/i, '.JPG');
-        zip.file(newRelativePath, jpegBlob);
-      } else {
-        progressDetails.textContent = `Bundling media ${i + 1} of ${totalPassThrough}: ${item.file.name}...`;
-        zip.file(item.relativePath, fileBuf);
+        if (item.format === 'heic' && convertHeic) {
+          progressDetails.textContent = `Converting standalone HEIC ${item.file.name} to 100% JPG...`;
+          const fileBuf = await item.file.arrayBuffer();
+          const { jpegBlob } = await convertHeicToJpegWithExif(item.file, new Uint8Array(fileBuf));
+          const newRelativePath = item.relativePath.replace(/\.heic$/i, '.JPG').replace(/\.heif$/i, '.JPG');
+          yield {
+            name: newRelativePath,
+            input: jpegBlob,
+            lastModified: item.file.lastModified ? new Date(item.file.lastModified) : new Date()
+          };
+        } else {
+          progressDetails.textContent = `Bundling media ${i + 1} of ${totalPassThrough}: ${item.file.name}...`;
+          yield {
+            name: item.relativePath,
+            input: item.file,
+            lastModified: item.file.lastModified ? new Date(item.file.lastModified) : new Date()
+          };
+        }
       }
     }
 
-    // 3. Finalize ZIP Package
+    // 3. Finalize Streaming ZIP Package (Zero contiguous ArrayBuffer limits)
     progressBar.style.width = '90%';
     progressPercent.textContent = '90%';
-    progressDetails.textContent = 'Packing final ZIP archive for Pixel...';
+    progressDetails.textContent = 'Streaming final ZIP archive for Pixel...';
     await new Promise(r => setTimeout(r, 40));
 
-    finalZipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+    if (typeof downloadZip !== 'undefined') {
+      finalZipBlob = await downloadZip(generateZipFiles()).blob();
+    } else {
+      // Fallback to JSZip if downloadZip isn't loaded
+      const zip = new JSZip();
+      for await (const entry of generateZipFiles()) {
+        zip.file(entry.name, entry.input);
+      }
+      finalZipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+    }
 
     progressBar.style.width = '100%';
     progressPercent.textContent = '100%';
