@@ -689,6 +689,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       ctx.drawImage(bitmap, 0, 0);
       bitmap.close();
       rawJpgBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1.0));
+      // Immediately release iOS WebKit GPU/IOSurface backing store memory
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = 0;
+      canvas.height = 0;
     } catch {
       // 2. Fallback to heic2any for Chrome / Firefox
       if (window.heic2any) {
@@ -707,11 +711,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 3. Extract original EXIF payload from the HEIC container
     const exifPayload = extractHeicExif(heicBytes);
     if (!exifPayload) {
-      const jpegBuf = new Uint8Array(await rawJpgBlob.arrayBuffer());
-      return { jpegBlob: rawJpgBlob, jpegBuf };
+      return { jpegBlob: rawJpgBlob };
     }
 
-    const rawJpg = new Uint8Array(await rawJpgBlob.arrayBuffer());
     const app1Len = 2 + exifPayload.length;
     const app1Segment = new Uint8Array(2 + app1Len);
     app1Segment[0] = 0xFF;
@@ -720,18 +722,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     app1Segment[3] = app1Len & 0xFF;
     app1Segment.set(exifPayload, 4);
 
-    // Insert APP1 right after SOI (offset 2)
-    const finalJpg = new Uint8Array(rawJpg.length + app1Segment.length);
-    finalJpg.set(rawJpg.subarray(0, 2), 0);
-    finalJpg.set(app1Segment, 2);
-    finalJpg.set(rawJpg.subarray(2), 2 + app1Segment.length);
-
-    const jpegBlob = new Blob([finalJpg], { type: 'image/jpeg' });
-    return { jpegBlob, jpegBuf: finalJpg };
+    // Insert APP1 right after SOI (offset 2) using zero-copy Blob slicing
+    const jpegBlob = new Blob([
+      rawJpgBlob.slice(0, 2),
+      app1Segment,
+      rawJpgBlob.slice(2)
+    ], { type: 'image/jpeg' });
+    return { jpegBlob };
   }
 
-  function muxJpeg(photoBytes, videoBytes, ptsUs = 750000, isStarred = false) {
-    const xmpXml = buildGCameraXmp(videoBytes.length, ptsUs, isStarred);
+  function muxJpeg(photoBlobOrBytes, videoBlobOrBytes, ptsUs = 750000, isStarred = false) {
+    const videoSize = videoBlobOrBytes.size !== undefined ? videoBlobOrBytes.size : videoBlobOrBytes.byteLength;
+    const xmpXml = buildGCameraXmp(videoSize, ptsUs, isStarred);
     const encoder = new TextEncoder();
     const headerBytes = encoder.encode("http://ns.adobe.com/xap/1.0/\0");
     const xmlBytes = encoder.encode(xmpXml);
@@ -745,22 +747,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     app1Segment.set(headerBytes, 4);
     app1Segment.set(xmlBytes, 4 + headerBytes.length);
 
-    // Insert APP1 right after SOI (index 2)
-    const taggedPhoto = new Uint8Array(photoBytes.length + app1Segment.length);
-    taggedPhoto.set(photoBytes.subarray(0, 2), 0);
-    taggedPhoto.set(app1Segment, 2);
-    taggedPhoto.set(photoBytes.subarray(2), 2 + app1Segment.length);
+    const pBlob = photoBlobOrBytes instanceof Blob ? photoBlobOrBytes : new Blob([photoBlobOrBytes]);
+    const vBlob = videoBlobOrBytes instanceof Blob ? videoBlobOrBytes : new Blob([videoBlobOrBytes]);
 
-    // Concatenate [Tagged Photo] + [Video Bytes]
-    const finalBytes = new Uint8Array(taggedPhoto.length + videoBytes.length);
-    finalBytes.set(taggedPhoto, 0);
-    finalBytes.set(videoBytes, taggedPhoto.length);
-
-    return new Blob([finalBytes], { type: 'image/jpeg' });
+    // Zero-copy composite Blob: [SOI (2 bytes), APP1 XMP, JPEG body on disk, Video File on disk]
+    return new Blob([
+      pBlob.slice(0, 2),
+      app1Segment,
+      pBlob.slice(2),
+      vBlob
+    ], { type: 'image/jpeg' });
   }
 
-  function muxHeic(photoBytes, videoBytes, ptsUs = 750000, isStarred = false) {
-    const xmpXml = buildGCameraXmp(videoBytes.length, ptsUs, isStarred);
+  function muxHeic(photoBytes, videoBlobOrBytes, ptsUs = 750000, isStarred = false, photoBlob = null) {
+    const videoSize = videoBlobOrBytes.size !== undefined ? videoBlobOrBytes.size : videoBlobOrBytes.byteLength;
+    const vBlob = videoBlobOrBytes instanceof Blob ? videoBlobOrBytes : new Blob([videoBlobOrBytes]);
+    const xmpXml = buildGCameraXmp(videoSize, ptsUs, isStarred);
     const encoder = new TextEncoder();
     const xmpBytes = encoder.encode(xmpXml);
 
@@ -790,10 +792,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!meta || !mdat) {
-      const fallback = new Uint8Array(photoBytes.length + videoBytes.length);
-      fallback.set(photoBytes, 0);
-      fallback.set(videoBytes, photoBytes.length);
-      return new Blob([fallback], { type: 'image/heic' });
+      const pPart = photoBlob || photoBytes.slice();
+      return new Blob([pPart, vBlob], { type: 'image/heic' });
     }
 
     // 2. Parse meta child boxes
@@ -811,10 +811,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!children["pitm"] || !children["iinf"] || !children["iloc"]) {
-      const fallback = new Uint8Array(photoBytes.length + videoBytes.length);
-      fallback.set(photoBytes, 0);
-      fallback.set(videoBytes, photoBytes.length);
-      return new Blob([fallback], { type: 'image/heic' });
+      const pPart = photoBlob || photoBytes.slice();
+      return new Blob([pPart, vBlob], { type: 'image/heic' });
     }
 
     // 3. Read pitm (primary item ID)
@@ -1130,20 +1128,197 @@ document.addEventListener('DOMContentLoaded', async () => {
       mp += part.length;
     }
 
-    const origMdatPayload = photoBytes.subarray(mdat.pos + mdat.hlen, mdat.pos + mdat.sz);
+    // 12. Assemble zero-copy composite Blob (only small headers in RAM; image mdat & video stay disk-backed)
+    const prefixPart = photoBlob ? photoBlob.slice(0, meta.pos) : photoBytes.slice(0, meta.pos);
+    const mdatPayloadPart = photoBlob
+      ? photoBlob.slice(mdat.pos + mdat.hlen, mdat.pos + mdat.sz)
+      : photoBytes.slice(mdat.pos + mdat.hlen, mdat.pos + mdat.sz);
 
-    // 12. Assemble final bytes
-    const finalLen = meta.pos + newMeta.length + newMdatHdr.length + xmpBytes.length + origMdatPayload.length + videoBytes.length;
-    const finalBytes = new Uint8Array(finalLen);
-    let fp = 0;
-    finalBytes.set(photoBytes.subarray(0, meta.pos), fp); fp += meta.pos;
-    finalBytes.set(newMeta, fp); fp += newMeta.length;
-    finalBytes.set(newMdatHdr, fp); fp += newMdatHdr.length;
-    finalBytes.set(xmpBytes, fp); fp += xmpBytes.length;
-    finalBytes.set(origMdatPayload, fp); fp += origMdatPayload.length;
-    finalBytes.set(videoBytes, fp);
+    return new Blob([
+      prefixPart,
+      newMeta,
+      newMdatHdr,
+      xmpBytes,
+      mdatPayloadPart,
+      vBlob
+    ], { type: 'image/heic' });
+  }
 
-    return new Blob([finalBytes], { type: 'image/heic' });
+  // --- Precomputed CRC-32 Lookup Table for Zero-Copy ZIP ---
+  const CRC32_TABLE = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    CRC32_TABLE[i] = c >>> 0;
+  }
+
+  async function computeBlobCrc32(blob) {
+    const CHUNK_SIZE = 1024 * 1024; // 1 MB window to keep peak RAM tiny on iOS
+    const total = blob.size;
+    let crc = 0xFFFFFFFF;
+    let offset = 0;
+    let chunksRead = 0;
+
+    while (offset < total) {
+      const end = Math.min(offset + CHUNK_SIZE, total);
+      const buf = await blob.slice(offset, end).arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) {
+        crc = (crc >>> 8) ^ CRC32_TABLE[(crc ^ bytes[i]) & 0xFF];
+      }
+      offset = end;
+      chunksRead++;
+      if (chunksRead % 16 === 0) {
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  // Builds a valid STORE (uncompressed) ZIP Blob where file payloads remain disk-backed Blob/File references
+  async function buildZeroCopyZip(entriesIterable) {
+    const zipBlobParts = [];
+    const centralDirParts = [];
+    const encoder = new TextEncoder();
+
+    let currentOffset = 0n;
+    let centralDirSize = 0n;
+    let fileCount = 0n;
+
+    for await (const entry of entriesIterable) {
+      const fileBlob = entry.input instanceof Blob ? entry.input : new Blob([entry.input]);
+      const fileSize = BigInt(fileBlob.size);
+      const crc = await computeBlobCrc32(fileBlob);
+
+      const cleanName = String(entry.name).replace(/\\/g, '/').replace(/^\/+/, '');
+      const nameBytes = encoder.encode(cleanName);
+      const modDate = (entry.lastModified instanceof Date && !isNaN(entry.lastModified))
+        ? entry.lastModified
+        : new Date();
+
+      const dosTime = (modDate.getSeconds() >> 1) | (modDate.getMinutes() << 5) | (modDate.getHours() << 11);
+      const dosDate = modDate.getDate() | ((modDate.getMonth() + 1) << 5) | ((Math.max(1980, modDate.getFullYear()) - 1980) << 9);
+
+      const isFileZip64 = fileSize >= 0xFFFFFFFFn;
+      const isOffsetZip64 = currentOffset >= 0xFFFFFFFFn;
+
+      // 1. Local File Header (30 bytes + filename + optional 20-byte ZIP64 extra)
+      const localExtraLen = isFileZip64 ? 20 : 0;
+      const localHeader = new Uint8Array(30 + nameBytes.length + localExtraLen);
+      const lhView = new DataView(localHeader.buffer);
+
+      lhView.setUint32(0, 0x04034b50, true); // Local file header signature
+      lhView.setUint16(4, isFileZip64 ? 45 : 20, true); // Version needed
+      lhView.setUint16(6, 0x0800, true); // Bit 11: UTF-8 filename
+      lhView.setUint16(8, 0, true); // Compression method 0 (STORE)
+      lhView.setUint16(10, dosTime, true);
+      lhView.setUint16(12, dosDate, true);
+      lhView.setUint32(14, crc, true);
+      lhView.setUint32(18, isFileZip64 ? 0xFFFFFFFF : Number(fileSize), true);
+      lhView.setUint32(22, isFileZip64 ? 0xFFFFFFFF : Number(fileSize), true);
+      lhView.setUint16(26, nameBytes.length, true);
+      lhView.setUint16(28, localExtraLen, true);
+      localHeader.set(nameBytes, 30);
+
+      if (isFileZip64) {
+        const ep = 30 + nameBytes.length;
+        lhView.setUint16(ep, 0x0001, true); // ZIP64 extra field tag
+        lhView.setUint16(ep + 2, 16, true);
+        lhView.setBigUint64(ep + 4, fileSize, true);
+        lhView.setBigUint64(ep + 12, fileSize, true);
+      }
+
+      // Push tiny header + disk-backed Blob/File reference (zero RAM copy of file payload!)
+      zipBlobParts.push(localHeader, fileBlob);
+
+      // 2. Central Directory Header
+      const cdExtraDataLen = (isFileZip64 ? 16 : 0) + (isOffsetZip64 ? 8 : 0);
+      const cdExtraTotalLen = cdExtraDataLen > 0 ? (4 + cdExtraDataLen) : 0;
+      const cdHeader = new Uint8Array(46 + nameBytes.length + cdExtraTotalLen);
+      const cdView = new DataView(cdHeader.buffer);
+
+      cdView.setUint32(0, 0x02014b50, true); // Central directory signature
+      cdView.setUint16(4, (isFileZip64 || isOffsetZip64) ? 45 : 20, true); // Version made by
+      cdView.setUint16(6, (isFileZip64 || isOffsetZip64) ? 45 : 20, true); // Version needed
+      cdView.setUint16(8, 0x0800, true); // Bit 11: UTF-8
+      cdView.setUint16(10, 0, true); // Compression method 0 (STORE)
+      cdView.setUint16(12, dosTime, true);
+      cdView.setUint16(14, dosDate, true);
+      cdView.setUint32(16, crc, true);
+      cdView.setUint32(20, isFileZip64 ? 0xFFFFFFFF : Number(fileSize), true);
+      cdView.setUint32(24, isFileZip64 ? 0xFFFFFFFF : Number(fileSize), true);
+      cdView.setUint16(28, nameBytes.length, true);
+      cdView.setUint16(30, cdExtraTotalLen, true);
+      cdView.setUint16(32, 0, true); // Comment length
+      cdView.setUint16(34, 0, true); // Disk number start
+      cdView.setUint16(36, 0, true); // Internal attrs
+      cdView.setUint32(38, 0, true); // External attrs
+      cdView.setUint32(42, isOffsetZip64 ? 0xFFFFFFFF : Number(currentOffset), true);
+      cdHeader.set(nameBytes, 46);
+
+      if (cdExtraTotalLen > 0) {
+        let ep = 46 + nameBytes.length;
+        cdView.setUint16(ep, 0x0001, true);
+        cdView.setUint16(ep + 2, cdExtraDataLen, true);
+        ep += 4;
+        if (isFileZip64) {
+          cdView.setBigUint64(ep, fileSize, true);
+          cdView.setBigUint64(ep + 8, fileSize, true);
+          ep += 16;
+        }
+        if (isOffsetZip64) {
+          cdView.setBigUint64(ep, currentOffset, true);
+        }
+      }
+
+      centralDirParts.push(cdHeader);
+      currentOffset += BigInt(localHeader.length) + fileSize;
+      centralDirSize += BigInt(cdHeader.length);
+      fileCount += 1n;
+    }
+
+    for (const cdPart of centralDirParts) {
+      zipBlobParts.push(cdPart);
+    }
+
+    const needZip64Eocd = fileCount >= 0xFFFFn || centralDirSize >= 0xFFFFFFFFn || currentOffset >= 0xFFFFFFFFn;
+    if (needZip64Eocd) {
+      const zip64Eocd = new Uint8Array(76);
+      const z64View = new DataView(zip64Eocd.buffer);
+      // ZIP64 End of Central Directory Record (56 bytes)
+      z64View.setUint32(0, 0x06064b50, true);
+      z64View.setBigUint64(4, 44n, true);
+      z64View.setUint16(12, 45, true);
+      z64View.setUint16(14, 45, true);
+      z64View.setUint32(16, 0, true);
+      z64View.setUint32(20, 0, true);
+      z64View.setBigUint64(24, fileCount, true);
+      z64View.setBigUint64(32, fileCount, true);
+      z64View.setBigUint64(40, centralDirSize, true);
+      z64View.setBigUint64(48, currentOffset, true);
+      // ZIP64 End of Central Directory Locator (20 bytes)
+      z64View.setUint32(56, 0x07064b50, true);
+      z64View.setUint32(60, 0, true);
+      z64View.setBigUint64(64, currentOffset + centralDirSize, true);
+      z64View.setUint32(72, 1, true);
+      zipBlobParts.push(zip64Eocd);
+    }
+
+    const eocd = new Uint8Array(22);
+    const eocdView = new DataView(eocd.buffer);
+    eocdView.setUint32(0, 0x06054b50, true);
+    eocdView.setUint16(4, 0, true);
+    eocdView.setUint16(6, 0, true);
+    eocdView.setUint16(8, fileCount >= 0xFFFFn ? 0xFFFF : Number(fileCount), true);
+    eocdView.setUint16(10, fileCount >= 0xFFFFn ? 0xFFFF : Number(fileCount), true);
+    eocdView.setUint32(12, centralDirSize >= 0xFFFFFFFFn ? 0xFFFFFFFF : Number(centralDirSize), true);
+    eocdView.setUint32(16, currentOffset >= 0xFFFFFFFFn ? 0xFFFFFFFF : Number(currentOffset), true);
+    eocdView.setUint16(20, 0, true);
+    zipBlobParts.push(eocd);
+
+    return new Blob(zipBlobParts, { type: 'application/zip' });
   }
 
   // --- Brainless Batch Processing & ZIP Packaging Trigger ---
@@ -1159,22 +1334,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     qrSection.classList.remove('visible');
     previewCard.classList.remove('visible');
     processedBlobs = [];
+    finalZipBlob = null;
 
     const convertHeic = convertHeicToggle ? convertHeicToggle.checked : false;
     let firstPreviewItem = null;
 
     async function* generateZipFiles() {
-      // 1. Process and Mux all Live Photos one-by-one (streaming directly into ZIP)
+      // 1. Process and Mux all Live Photos one-by-one (zero-copy composite Blobs)
       for (let i = 0; i < totalPairs; i++) {
         const pair = matchedPairs[i];
-        const percent = Math.round(((i) / totalWork) * 85);
+        const percent = Math.round((i / totalWork) * 95);
         progressBar.style.width = `${percent}%`;
         progressPercent.textContent = `${percent}%`;
 
-        await new Promise(r => setTimeout(r, 10));
-
-        const photoBuf = new Uint8Array(await pair.photo.arrayBuffer());
-        const videoBuf = new Uint8Array(await pair.video.arrayBuffer());
+        // Yield to event loop so iOS Safari can update UI and run garbage collection
+        await new Promise(r => setTimeout(r, 0));
 
         let muxedBlob;
         let displayPhotoBlob;
@@ -1182,33 +1356,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (pair.format === 'heic' && convertHeic) {
           progressDetails.textContent = `Converting HEIC to 100% JPG & Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
-          const { jpegBlob, jpegBuf } = await convertHeicToJpegWithExif(pair.photo, photoBuf);
-          muxedBlob = muxJpeg(jpegBuf, videoBuf, 750000, pair.isStarred);
+          const photoBuf = new Uint8Array(await pair.photo.arrayBuffer());
+          const { jpegBlob } = await convertHeicToJpegWithExif(pair.photo, photoBuf);
+          muxedBlob = muxJpeg(jpegBlob, pair.video, 750000, pair.isStarred);
           displayPhotoBlob = jpegBlob;
           targetExt = 'MP.JPG';
         } else if (pair.format === 'heic') {
           progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
-          muxedBlob = muxHeic(photoBuf, videoBuf, 750000, pair.isStarred);
-          displayPhotoBlob = new Blob([photoBuf], { type: 'image/heic' });
+          const photoBuf = new Uint8Array(await pair.photo.arrayBuffer());
+          muxedBlob = muxHeic(photoBuf, pair.video, 750000, pair.isStarred, pair.photo);
+          displayPhotoBlob = pair.photo;
           targetExt = 'MP.HEIC';
         } else {
           progressDetails.textContent = `Muxing Live Photo ${i + 1} of ${totalPairs}: ${pair.photo.name}...`;
-          muxedBlob = muxJpeg(photoBuf, videoBuf, 750000, pair.isStarred);
-          displayPhotoBlob = new Blob([photoBuf], { type: 'image/jpeg' });
+          muxedBlob = muxJpeg(pair.photo, pair.video, 750000, pair.isStarred);
+          displayPhotoBlob = pair.photo;
           targetExt = 'MP.JPG';
         }
 
         const outputFilename = `${pair.stem}.${targetExt}`;
         const zipPath = pair.dir ? `${pair.dir}/${outputFilename}` : outputFilename;
 
-        // Keep preview only for the first photo to preserve memory
+        // Keep preview only for the first photo using disk-backed File references
         if (!firstPreviewItem) {
           firstPreviewItem = {
             filename: outputFilename,
             zipPath,
             blob: muxedBlob,
             photoBlob: displayPhotoBlob,
-            videoBlob: new Blob([videoBuf], { type: 'video/mp4' })
+            videoBlob: pair.video
           };
           processedBlobs = [firstPreviewItem];
         }
@@ -1220,20 +1396,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
       }
 
-      // 2. Stream all Pass-Through Media
+      // 2. Stream all Pass-Through Media (keep disk-backed File references directly)
       for (let i = 0; i < totalPassThrough; i++) {
         const item = passThroughFiles[i];
         const completed = totalPairs + i;
-        const percent = Math.round((completed / totalWork) * 85);
+        const percent = Math.round((completed / totalWork) * 95);
         progressBar.style.width = `${percent}%`;
         progressPercent.textContent = `${percent}%`;
 
-        if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
+        if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
 
         if (item.format === 'heic' && convertHeic) {
           progressDetails.textContent = `Converting standalone HEIC ${item.file.name} to 100% JPG...`;
-          const fileBuf = await item.file.arrayBuffer();
-          const { jpegBlob } = await convertHeicToJpegWithExif(item.file, new Uint8Array(fileBuf));
+          const fileBuf = new Uint8Array(await item.file.arrayBuffer());
+          const { jpegBlob } = await convertHeicToJpegWithExif(item.file, fileBuf);
           const newRelativePath = item.relativePath.replace(/\.heic$/i, '.JPG').replace(/\.heif$/i, '.JPG');
           yield {
             name: newRelativePath,
@@ -1242,47 +1418,32 @@ document.addEventListener('DOMContentLoaded', async () => {
           };
         } else {
           progressDetails.textContent = `Bundling media ${i + 1} of ${totalPassThrough}: ${item.file.name}...`;
-          let inputData = item.file;
-          try {
-            const buf = await item.file.arrayBuffer();
-            inputData = new Uint8Array(buf);
-          } catch (_) {
-            inputData = item.file;
-          }
           yield {
             name: item.relativePath,
-            input: inputData,
+            input: item.file,
             lastModified: item.file.lastModified ? new Date(item.file.lastModified) : new Date()
           };
         }
       }
     }
 
-    // 3. Finalize Streaming ZIP Package (Zero contiguous ArrayBuffer limits)
-    progressBar.style.width = '90%';
-    progressPercent.textContent = '90%';
-    progressDetails.textContent = 'Streaming final ZIP archive for Pixel...';
-    await new Promise(r => setTimeout(r, 40));
+    try {
+      finalZipBlob = await buildZeroCopyZip(generateZipFiles());
 
-    if (typeof downloadZip !== 'undefined') {
-      finalZipBlob = await downloadZip(generateZipFiles()).blob();
-    } else {
-      // Fallback to JSZip if downloadZip isn't loaded
-      const zip = new JSZip();
-      for await (const entry of generateZipFiles()) {
-        zip.file(entry.name, entry.input);
-      }
-      finalZipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      progressBar.style.width = '100%';
+      progressPercent.textContent = '100%';
+      progressDetails.textContent = 'All photos and videos packaged successfully!';
+
+      setTimeout(() => {
+        progressCard.classList.remove('visible');
+        convertBtn.disabled = false;
+        showResults(finalZipBlob, totalPairs, totalPassThrough);
+      }, 400);
+    } catch (err) {
+      console.error('Packaging error:', err);
+      progressDetails.textContent = `Error packaging files: ${err.message || err}`;
+      convertBtn.disabled = false;
     }
-
-    progressBar.style.width = '100%';
-    progressPercent.textContent = '100%';
-    progressDetails.textContent = 'All photos and videos packaged successfully!';
-
-    setTimeout(() => {
-      progressCard.classList.remove('visible');
-      showResults(finalZipBlob, totalPairs, totalPassThrough);
-    }, 400);
   });
 
   function showResults(zipBlob, numLivePhotos, numOtherMedia) {
@@ -1913,6 +2074,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (receiverStatus) receiverStatus.textContent = `Receiving ${data.filename} (${(data.size / (1024 * 1024)).toFixed(1)} MB)...`;
           } else if (data.type === 'done') {
             const finalBlob = new Blob(receivedChunks, { type: (receivedMeta && receivedMeta.mimeType) || 'application/zip' });
+            receivedChunks = [];
             const filename = (receivedMeta && receivedMeta.filename) || 'Pixel_MotionPhotos.zip';
             const blobSizeMb = (finalBlob.size / (1024 * 1024)).toFixed(1);
 
@@ -1952,6 +2114,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           // Binary chunk (ArrayBuffer)
           const byteLen = data.byteLength || (data.buffer && data.buffer.byteLength) || data.length || 0;
           receivedChunks.push(data);
+          // Periodically compact ArrayBuffers into a Blob so the browser can spill to disk and free JS heap
+          if (receivedChunks.length >= 256) {
+            receivedChunks = [new Blob(receivedChunks)];
+          }
           receivedBytes += byteLen;
 
           if (receivedMeta && receivedMeta.size > 0) {
